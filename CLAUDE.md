@@ -15,7 +15,17 @@ the original project brief (not stored in-repo); phase status below.
 
 **Phase 1 (Base) — done.** Monorepo skeleton, Docker Compose (ollama/api/web), FastAPI
 healthcheck, full SQLModel schema + first Alembic migration, Next.js placeholder, CI.
-No agent, tools, risk engine, report, or real GUI yet — those land in Phases 2–6.
+
+**Phase 2 (Passive tools) — done.** All 13 passive tool wrappers (`api/vigia/tools/`),
+`kev_epss_enrich`, and a deterministic pipeline (`api/vigia/pipeline.py`, no LLM)
+wired into `vigia scan <domain>` (`--passive` is the only mode so far). Every
+finding is stored with placeholder severity/score — see ADR-005; the Risk Engine
+lands in Phase 4. `subfinder` and `dnstwist` need a real binary/PATH entry
+(`dnstwist` is a pip dependency with a CLI; `subfinder` is built in `api/Dockerfile`
+from Go source) — outside Docker, those two tools report a graceful "binary not
+found" error rather than failing the scan.
+
+No agent, risk engine, report, or real GUI yet — those land in Phases 3–6.
 
 ## Commands
 
@@ -30,6 +40,7 @@ uv run mypy .                # strict type-check
 uv run alembic upgrade head  # apply migrations
 uv run alembic revision --autogenerate -m "..."   # new migration
 uv run uvicorn vigia.api.main:app --reload        # run the API locally
+uv run vigia scan <domain>   # deterministic passive pipeline, no LLM (Phase 2)
 ```
 
 ### Frontend (`web/`)
@@ -85,6 +96,8 @@ outside a fixed Pydantic schema.
 ```
 vigia/
 ├── api/            FastAPI backend (vigia/ package: agent, tools, risk, report, db, api)
+│                   tools/ has 13 passive wrappers + kev_epss_enrich (Phase 2);
+│                   pipeline.py is the deterministic `vigia scan` pipeline
 ├── web/             Next.js frontend
 ├── eval/            Benchmark lab, ground truth, results (Phase 8)
 ├── docs/            architecture.md, ethics.md, decisions.md (ADRs)

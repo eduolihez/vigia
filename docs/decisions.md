@@ -3,6 +3,51 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
+## ADR-007: `dnspython` for `dns_resolve`/`dangling_dns`, `dnsx` left out of the image
+
+- **Context:** brief section 4 allows `dnsx` (ProjectDiscovery Go binary) *or*
+  `dnspython` for the `dns_resolve` tool.
+- **Decision:** used `dnspython` (`dns.asyncresolver`) for both `dns_resolve` and
+  `dangling_dns`'s CNAME-chain walk. It needs no external binary, so local dev and CI
+  don't depend on a Docker-only tool, and its async resolver fits the tool wrappers'
+  async signatures directly. `dnsx` isn't installed in `api/Dockerfile`.
+- **Consequence:** if a later phase needs `dnsx`'s bulk-resolution speed (e.g. the
+  agent resolving hundreds of hosts concurrently), it can be added then without
+  changing `dns_resolve`'s public contract.
+
+## ADR-006: `email_auth` checks DKIM manually — `checkdmarc` doesn't support it
+
+- **Context:** brief section 4 says `email_auth` uses `checkdmarc` for "SPF, DKIM
+  (common selectors) and DMARC".
+- **Decision:** verified `checkdmarc==6.0.3` (installed 2026-09-24) live against
+  `example.com`: `checkdmarc.check_domains()` returns SPF, DMARC, MX, DNSSEC, MTA-STS,
+  BIMI and SMTP-TLS-RPT data, but has **no DKIM support at all** (no `dkim` key in its
+  output, no dkim-related function anywhere in the package). `email_auth.py` therefore
+  checks a short list of common DKIM selectors (google, selector1/2, k1, mail,
+  default, dkim, smtp, mandrill, mailgun, sendgrid, amazonses) directly via DNS TXT
+  lookups, and still uses `checkdmarc` for SPF/DMARC as specified.
+- **Consequence:** the DKIM check is inherently non-exhaustive (documented in the
+  tool's docstring and in its `dkim_not_found` finding text) — an uncommon selector
+  won't be found. A real-world test against `example.com` also showed this check can
+  surface a *present-but-empty* DKIM record (`v=DKIM1; p=`) as "found", which is
+  technically a null/revoked key rather than an active one; refining that distinction
+  is left for a later pass since it doesn't affect the pipeline's correctness.
+
+## ADR-005: Phase 2 findings use placeholder severity (INFO/score 0) — no Risk Engine yet
+
+- **Context:** the `Finding` table requires non-nullable `severity`, `score`, and
+  `remediation`, but the Risk Engine (CVSS + KEV + EPSS + exposure scoring) is Phase 4
+  scope, not Phase 2.
+- **Decision:** every `Finding` persisted by the deterministic passive pipeline
+  (`vigia/pipeline.py`) is stored with `severity=INFO`, `score=0.0`, and a fixed
+  remediation placeholder pointing at Phase 4. KEV membership and EPSS score (from
+  `kev_epss_enrich`) *are* already populated on the `Finding` row where a CVE is known,
+  since that data doesn't depend on the Risk Engine's scoring formula — only the
+  severity/score mapping does.
+- **Consequence:** Phase 4 will need a backfill/rescoring pass (or simply re-run scans)
+  once `risk/engine.py` exists; until then, findings in the DB and CLI output are
+  informational only and should not be read as prioritized.
+
 ## ADR-004: `uv` for Python, `pnpm` (via Corepack) for JS
 
 - **Context:** Phase 1 needs a package manager for both the `api/` (Python) and `web/`

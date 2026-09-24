@@ -20,6 +20,13 @@ class Settings(BaseSettings):
     scan_max_steps: int = Field(default=60, alias="VIGIA_SCAN_MAX_STEPS")
     scan_max_minutes: int = Field(default=20, alias="VIGIA_SCAN_MAX_MINUTES")
 
+    # Dev/local convenience only — the Settings UI (Phase 6) stores these encrypted in
+    # the ApiKey table instead. Never sent to the LLM.
+    censys_api_id: str | None = Field(default=None, alias="CENSYS_API_ID")
+    censys_api_secret: str | None = Field(default=None, alias="CENSYS_API_SECRET")
+    github_token: str | None = Field(default=None, alias="GITHUB_TOKEN")
+    hibp_api_key: str | None = Field(default=None, alias="HIBP_API_KEY")
+
 
 @lru_cache
 def get_settings() -> Settings:

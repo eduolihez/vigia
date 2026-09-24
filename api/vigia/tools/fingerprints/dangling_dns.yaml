@@ -1,0 +1,51 @@
+# Dangling-DNS / subdomain-takeover CNAME fingerprints.
+#
+# A curated, versioned subset of well-known "can-i-take-over-xyz" style patterns:
+# a CNAME pointing at one of these services is a *candidate* for takeover if the
+# target isn't claimed. This tool is passive-only (Phase 2): it flags the candidate
+# from the CNAME pattern alone and does not attempt to confirm exploitability with an
+# active HTTP probe (that's `http_probe`, Phase 7, once the target is verified).
+#
+# version: 1 (2026-09-24)
+
+fingerprints:
+  - service: GitHub Pages
+    cname_suffix: github.io
+  - service: Heroku
+    cname_suffix: herokuapp.com
+  - service: AWS S3
+    cname_suffix: s3.amazonaws.com
+  - service: Azure Web Apps
+    cname_suffix: azurewebsites.net
+  - service: Azure Cloud Services
+    cname_suffix: cloudapp.net
+  - service: Azure Traffic Manager
+    cname_suffix: trafficmanager.net
+  - service: WP Engine
+    cname_suffix: wpengine.com
+  - service: Surge.sh
+    cname_suffix: surge.sh
+  - service: Readme.io
+    cname_suffix: readme.io
+  - service: Statuspage.io
+    cname_suffix: statuspage.io
+  - service: Shopify
+    cname_suffix: myshopify.com
+  - service: Unbounce
+    cname_suffix: unbouncepages.com
+  - service: Pantheon
+    cname_suffix: pantheonsite.io
+  - service: Ghost (Ghost.io)
+    cname_suffix: ghost.io
+  - service: Fastly
+    cname_suffix: fastly.net
+  - service: Zendesk
+    cname_suffix: zendesk.com
+  - service: Help Scout
+    cname_suffix: helpscoutdocs.com
+  - service: Tumblr
+    cname_suffix: domains.tumblr.com
+  - service: Netlify
+    cname_suffix: netlify.app
+  - service: Vercel
+    cname_suffix: vercel-dns.com

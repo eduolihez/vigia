@@ -17,6 +17,10 @@ dependencies = [
   "typer>=0.13",
   "cryptography>=43.0",
   "aiosqlite>=0.20",
+  "checkdmarc>=6.0.3",
+  "dnspython>=2.8.0",
+  "pyyaml>=6.0.3",
+  "dnstwist>=20250130",
 ]
 
 [project.optional-dependencies]
@@ -26,6 +30,7 @@ dev = [
   "pytest>=8.3",
   "pytest-asyncio>=0.24",
   "respx>=0.21",
+  "types-pyyaml>=6.0.12.20260906",
 ]
 
 [project.scripts]
@@ -54,6 +59,19 @@ plugins = []
 [[tool.mypy.overrides]]
 module = "ollama.*"
 ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "checkdmarc.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+  "test_dns_resolve",
+  "test_dangling_dns",
+  "test_email_auth",
+  "test_passive_pipeline",
+]
+disallow_untyped_calls = false
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

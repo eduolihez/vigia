@@ -84,9 +84,7 @@ async def _load_kev_catalog(
 async def _fetch_epss(client: httpx.AsyncClient, cves: list[str]) -> dict[str, dict[str, str]]:
     if not cves:
         return {}
-    response = await request_with_retry(
-        client, "GET", EPSS_API_URL, params={"cve": ",".join(cves)}
-    )
+    response = await request_with_retry(client, "GET", EPSS_API_URL, params={"cve": ",".join(cves)})
     response.raise_for_status()
     return {row["cve"]: row for row in response.json().get("data", [])}
 

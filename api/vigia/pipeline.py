@@ -164,6 +164,10 @@ async def _persist_findings(
 async def run_passive_scan(
     session: AsyncSession, domain: str, settings: Settings
 ) -> PipelineSummary:
+    from vigia.ethics import ensure_accepted
+
+    await ensure_accepted(session)
+
     scan = Scan(
         domain=domain,
         mode=ScanMode.PASSIVE,
@@ -220,9 +224,7 @@ async def run_passive_scan(
         await record("enumerate", result, {"domain": domain})
 
         # 4. Resolve DNS for the root domain + discovered subdomains (bounded)
-        hostnames = [domain] + [
-            v for v, a in assets_by_value.items() if a.type == "subdomain"
-        ]
+        hostnames = [domain] + [v for v, a in assets_by_value.items() if a.type == "subdomain"]
         hostnames = hostnames[:MAX_SUBDOMAINS_TO_RESOLVE]
         cname_targets: dict[str, str] = {}
         for hostname in hostnames:

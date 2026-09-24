@@ -59,9 +59,7 @@ async def run(input: DnsResolveInput) -> ToolResult:
     assets: list[DiscoveredAsset] = []
     for rtype in ("A", "AAAA"):
         for value in records[rtype]:
-            assets.append(
-                DiscoveredAsset(type="ip", value=value, parent_value=input.hostname)
-            )
+            assets.append(DiscoveredAsset(type="ip", value=value, parent_value=input.hostname))
 
     raw_output = json.dumps({"hostname": input.hostname, "records": records}).encode()
     return finalize(SPEC.name, start, raw_output=raw_output, assets=assets)

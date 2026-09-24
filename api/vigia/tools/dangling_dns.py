@@ -72,9 +72,7 @@ async def run(input: DanglingDnsInput) -> ToolResult:
     chain, resolves = await _resolve_cname_chain(input.hostname)
     findings: list[FindingCandidate] = []
 
-    resolve_note = (
-        "resolves" if resolves else "does NOT resolve (NXDOMAIN) — higher confidence"
-    )
+    resolve_note = "resolves" if resolves else "does NOT resolve (NXDOMAIN) — higher confidence"
     for cname in chain:
         for fp in fingerprints:
             if cname.lower().endswith(fp["cname_suffix"]):

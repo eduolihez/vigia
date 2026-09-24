@@ -3,6 +3,96 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
+## ADR-013: model availability check calls `show()` per model, not `list()`
+
+- **Context:** brief section 2 requires checking which Ollama models are installed
+  and support tool-calling at startup, falling back to an installed one if the
+  configured model is missing.
+- **Decision:** verified live against a real local Ollama instance: the installed
+  `ollama` Python package's `Client.list()` (`/api/tags`) does **not** surface a
+  model's `capabilities` field, even though the raw HTTP endpoint includes it —
+  `Client.show()` (`/api/show`) does return it. `check_model_availability()`
+  therefore lists installed models, then calls `show()` on each to filter for
+  tool-calling support. Confirmed working live: with `qwen3.6:35b` unset locally, it
+  correctly fell back to an installed `qwen2.5:14b-instruct`.
+- **Consequence:** one extra HTTP round-trip per installed model at scan start —
+  negligible for a local Ollama instance with a handful of models.
+
+## ADR-012: deep dive resumes at the phase *after* the one it interrupted
+
+- **Context:** brief section 5 says `deep_dive` "returns to EXPOSURE for that asset"
+  but doesn't specify what happens when the planner is done with the deep dive.
+- **Decision:** the orchestrator records the phase the deep dive interrupted
+  (`deep_dive_return_phase`); the next `advance_phase` call resumes at the phase
+  *after* that one, not back at the interrupted phase itself. E.g. a deep dive
+  triggered from LEAKS jumps to EXPOSURE, and finishing it resumes at RISK, not back
+  at LEAKS. Verified with `test_deep_dive_from_leaks_returns_to_risk_not_back_to_leaks`.
+- **Consequence:** a phase is never revisited from scratch because of a deep dive —
+  only the specific asset gets the extra EXPOSURE-phase look.
+
+## ADR-011: SEED runs deterministically; no-new-assets early stop is scoped to
+  discovery phases only
+
+- **Context:** live testing (real Ollama, real `whois_asn` call against
+  `example.com`) surfaced a real bug: SEED's only tool (`whois_asn`) discovers *ASN
+  info*, not new *assets*, for a bare domain (it only enriches ASN when given an IP).
+  With SEED as an LLM-driven phase, the planner had nothing else to call, re-called
+  the same tool, and the "2 consecutive iterations with no new assets" early-stop
+  (brief section 5) killed the scan before it reached ENUMERATE.
+- **Decision:** two fixes. (1) SEED now runs its tool(s) deterministically and
+  auto-advances, like VERIFY/REPORT — it needs no planner judgment. (2) The
+  no-new-assets counter only applies in phases whose tools are meant to discover
+  assets (ENUMERATE, RESOLVE, EXPOSURE); EMAIL_AND_SPOOFING/LEAKS/RISK tools
+  (`email_auth`, `github_leaks`, `hibp_domain`, `kev_epss_enrich`) are findings-only
+  by design and would otherwise trip an early stop for entirely expected behavior.
+- **Consequence:** caught and fixed before this phase's tests were even written,
+  purely from real end-to-end verification — a good example of why rule 6 ("verify
+  passively against a real domain") earns its place even for internal logic bugs,
+  not just API-shape assumptions.
+
+## ADR-010: `Planner` as a `Protocol`, not a concrete-class dependency
+
+- **Context:** `AgentOrchestrator` needs a planner (real Ollama-backed in
+  production, a scripted fake in tests) to decide each step.
+- **Decision:** `agent/llm_client.py` defines a `Planner` Protocol (structural
+  typing: anything with a matching `async def decide(...)`) instead of requiring
+  the concrete `PlannerClient` class. `AgentOrchestrator.__init__` takes
+  `planner: Planner`. Test fakes (`FakePlanner`) satisfy it with zero coupling to
+  the real Ollama client.
+- **Consequence:** orchestrator tests run fully offline and deterministically,
+  scripting exact planner decisions per phase, while mypy strict still checks the
+  interface shape.
+
+## ADR-009: phase-to-tool mapping and the agent state machine's exact semantics
+
+- **Context:** brief section 5 names the phases (VERIFY → SEED → ENUMERATE →
+  RESOLVE → EXPOSURE → EMAIL_AND_SPOOFING → LEAKS → RISK → REPORT → DONE) but not
+  which of the 13 passive tools belongs to which phase.
+- **Decision:** mapped tools to phases by what they discover (see
+  `agent/phases.py::PHASE_TOOLS`), reusing the same phase-name strings the Phase 2
+  pipeline already writes to `ToolCall.phase` for audit-log consistency. VERIFY and
+  REPORT have no tools yet (ownership verification only matters for active mode —
+  Phase 7; the Report Writer is Phase 4) and auto-advance without consuming a
+  planner turn. A tool call is rejected before it runs if the planner requests a
+  tool outside the current phase's allowlist (`tool_router.invoke`).
+- **Consequence:** this mapping (and REPORT's no-op) will need revisiting once
+  Phase 4's Report Writer exists — tracked as follow-up, not urgent now.
+
+## ADR-008: ethical-use notice is a `Setting` row, enforced in both scan entrypoints
+
+- **Context:** brief section 6.9 requires a first-run ethical-use notice the operator
+  must accept before scanning; the UI checkbox for this is Phase 5/6 scope.
+- **Decision:** a single `Setting` row (`ethical_notice_accepted_at`) records
+  acceptance; `vigia.ethics.ensure_accepted()` is called at the start of both scan
+  entrypoints — the Phase 2 deterministic pipeline (`pipeline.run_passive_scan`) and
+  the Phase 3 agent (`orchestrator.run_agent_scan`) — raising
+  `EthicsNoticeNotAccepted` if it hasn't been accepted. A `vigia ethics --accept` CLI
+  command and (implicitly, via the same check) the `/scans/agent` API endpoint are
+  the two ways to hit this gate today.
+- **Consequence:** no scan can run — from any entrypoint — until the notice is
+  accepted once. The real UI acceptance flow (Phase 5/6) will call the same
+  `ethics.accept()` function.
+
 ## ADR-007: `dnspython` for `dns_resolve`/`dangling_dns`, `dnsx` left out of the image
 
 - **Context:** brief section 4 allows `dnsx` (ProjectDiscovery Go binary) *or*

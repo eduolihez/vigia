@@ -19,6 +19,7 @@ class Settings(BaseSettings):
 
     scan_max_steps: int = Field(default=60, alias="VIGIA_SCAN_MAX_STEPS")
     scan_max_minutes: int = Field(default=20, alias="VIGIA_SCAN_MAX_MINUTES")
+    scan_max_deep_dives: int = Field(default=5, alias="VIGIA_SCAN_MAX_DEEP_DIVES")
 
     # Dev/local convenience only — the Settings UI (Phase 6) stores these encrypted in
     # the ApiKey table instead. Never sent to the LLM.

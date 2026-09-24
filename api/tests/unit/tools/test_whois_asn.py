@@ -6,9 +6,7 @@ from vigia.tools.whois_asn import WhoisAsnInput, run
 
 @respx.mock
 async def test_whois_asn_finds_asn_holder() -> None:
-    respx.get("https://stat.ripe.net/data/whois/data.json").respond(
-        json={"data": {"records": []}}
-    )
+    respx.get("https://stat.ripe.net/data/whois/data.json").respond(json={"data": {"records": []}})
     respx.get("https://stat.ripe.net/data/network-info/data.json").respond(
         json={"data": {"asns": ["15133"], "prefix": "93.184.216.0/24"}}
     )

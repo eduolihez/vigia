@@ -19,6 +19,7 @@ import vigia.tools.typosquat as typosquat_module
 from vigia.config import Settings
 from vigia.db.models import Asset, Finding, Scan, ToolCall
 from vigia.db.session import _session_factory
+from vigia.ethics import accept as accept_ethics_notice
 from vigia.pipeline import run_passive_scan
 
 DNS_A_ANSWERS = {
@@ -68,9 +69,7 @@ async def test_passive_pipeline_persists_assets_and_findings(
     respx.get("https://stat.ripe.net/data/network-info/data.json").respond(
         json={"data": {"asns": [], "prefix": ""}}
     )
-    respx.get("https://crt.sh/").respond(
-        json=[{"name_value": "www.example.com"}]
-    )
+    respx.get("https://crt.sh/").respond(json=[{"name_value": "www.example.com"}])
     respx.get("https://internetdb.shodan.io/93.184.216.34").respond(
         json={
             "ip": "93.184.216.34",
@@ -89,9 +88,7 @@ async def test_passive_pipeline_persists_assets_and_findings(
         "https://www.cisa.gov/sites/default/files/feeds/known_exploited_vulnerabilities.json"
     ).respond(
         json={
-            "vulnerabilities": [
-                {"cveID": "CVE-2021-44228", "knownRansomwareCampaignUse": "Known"}
-            ]
+            "vulnerabilities": [{"cveID": "CVE-2021-44228", "knownRansomwareCampaignUse": "Known"}]
         }
     )
     respx.get("https://api.first.org/data/v1/epss").respond(
@@ -104,6 +101,7 @@ async def test_passive_pipeline_persists_assets_and_findings(
     )
 
     async with _session_factory() as session:
+        await accept_ethics_notice(session)
         summary = await run_passive_scan(session, "example.com", settings)
 
         assert summary.status == "completed"

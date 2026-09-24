@@ -70,6 +70,7 @@ module = [
   "test_dangling_dns",
   "test_email_auth",
   "test_passive_pipeline",
+  "test_ownership",
 ]
 disallow_untyped_calls = false
 

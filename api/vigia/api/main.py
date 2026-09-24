@@ -5,8 +5,10 @@ from sqlalchemy import text
 
 from vigia import __version__
 from vigia.api.deps import SessionDep
+from vigia.api.scans import router as scans_router
 
 app = FastAPI(title="Vigía API", version=__version__)
+app.include_router(scans_router)
 
 
 @app.get("/health")

@@ -59,9 +59,7 @@ async def run(
     if response.status_code == 404:
         return finalize(SPEC.name, start, raw_output=response.content)
     if response.status_code == 403:
-        return finalize(
-            SPEC.name, start, error="HIBP: domain not verified for this API key"
-        )
+        return finalize(SPEC.name, start, error="HIBP: domain not verified for this API key")
     if response.status_code != 200:
         return finalize(SPEC.name, start, error=f"HIBP returned HTTP {response.status_code}")
 

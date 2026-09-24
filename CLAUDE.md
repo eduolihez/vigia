@@ -25,7 +25,22 @@ lands in Phase 4. `subfinder` and `dnstwist` need a real binary/PATH entry
 from Go source) — outside Docker, those two tools report a graceful "binary not
 found" error rather than failing the scan.
 
-No agent, risk engine, report, or real GUI yet — those land in Phases 3–6.
+**Phase 3 (Agent) — done.** LLM-driven orchestrator (`api/vigia/agent/orchestrator.py`)
+implementing the VERIFY→SEED→ENUMERATE→RESOLVE→EXPOSURE→EMAIL_AND_SPOOFING→LEAKS→
+RISK→REPORT→DONE state machine, real `ollama` tool-calling (planner Protocol, model
+availability check + fallback — ADR-013), Scope Guard, Sanitizer, deterministic
+fallback after 3 invalid planner turns, deep dives, budget/early-stop, SSE events, an
+immutable/exportable `ToolCall` audit log, and an ethical-use acceptance gate shared
+with the Phase 2 pipeline (ADR-008). Minimal API surface: `POST /scans/agent` (SSE
+stream) and `GET /scans/{id}/audit`. `vigia scan <domain> --agent` runs it from the
+CLI. Verified live against a real local Ollama instance (not just mocks) — one bug
+(SEED phase mapping) was caught and fixed this way, see ADR-011. Prompt-injection
+suite: 17 payloads (brief requires ≥15), 0% success, plus 7 structural-enforcement
+tests (`api/tests/injection/`).
+
+No risk engine, report, or real GUI yet — those land in Phases 4–6. Report Writer/
+Validator don't exist, so the REPORT phase auto-advances (no-op) for now; findings
+still carry Phase 2's placeholder severity (ADR-005).
 
 ## Commands
 
@@ -40,7 +55,11 @@ uv run mypy .                # strict type-check
 uv run alembic upgrade head  # apply migrations
 uv run alembic revision --autogenerate -m "..."   # new migration
 uv run uvicorn vigia.api.main:app --reload        # run the API locally
-uv run vigia scan <domain>   # deterministic passive pipeline, no LLM (Phase 2)
+uv run vigia scan <domain>          # deterministic passive pipeline, no LLM (Phase 2)
+uv run vigia scan <domain> --agent  # LLM-driven agent (Phase 3); needs Ollama running
+                                     #  and OLLAMA_HOST/VIGIA_PLANNER_MODEL configured
+                                     #  (or pass --model to override for one scan)
+uv run vigia ethics --accept        # required once before any scan will run
 ```
 
 ### Frontend (`web/`)
@@ -97,7 +116,8 @@ outside a fixed Pydantic schema.
 vigia/
 ├── api/            FastAPI backend (vigia/ package: agent, tools, risk, report, db, api)
 │                   tools/ has 13 passive wrappers + kev_epss_enrich (Phase 2);
-│                   pipeline.py is the deterministic `vigia scan` pipeline
+│                   pipeline.py is the deterministic `vigia scan` pipeline;
+│                   agent/ is the Phase 3 LLM orchestrator (see agent/orchestrator.py)
 ├── web/             Next.js frontend
 ├── eval/            Benchmark lab, ground truth, results (Phase 8)
 ├── docs/            architecture.md, ethics.md, decisions.md (ADRs)

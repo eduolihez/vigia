@@ -55,10 +55,21 @@ jobs:
         run: corepack pnpm run typecheck
       - name: Install Playwright Chromium
         run: corepack pnpm exec playwright install --with-deps chromium
+      - name: Start Next.js server
+        run: |
+          corepack pnpm run start &
+          echo $! > /tmp/next-start.pid
+          for i in $(seq 1 30); do
+            curl -sf http://127.0.0.1:3000 >/dev/null 2>&1 && break
+            sleep 1
+          done
       - name: Playwright smoke tests
-        run: corepack pnpm run test:e2e
+        run: corepack pnpm exec playwright test
         env:
           CI: true
+      - name: Stop Next.js server
+        if: always()
+        run: kill -9 "$(cat /tmp/next-start.pid)" 2>/dev/null || true
 
   docker-build:
     name: Docker image builds

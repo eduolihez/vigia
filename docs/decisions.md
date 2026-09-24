@@ -3,11 +3,38 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
-## ADR-022: Playwright smoke tests mock the API — a real backend call hung CI
+## ADR-023: CI starts/stops the Playwright webServer itself — Playwright's own teardown hung
+
+- **Context:** after ADR-022's mocking fix, CI still hung on "Playwright smoke tests"
+  — but the logs showed all 6 tests passing in ~2s; the job then sat idle for 5+
+  minutes with no further output until manually cancelled. So the hang was never in
+  the tests or in network calls (ADR-022's original diagnosis was incomplete): it was
+  in Playwright's `webServer` teardown, which sends a kill signal through
+  `corepack pnpm run start` after the run finishes. That command chain (corepack →
+  pnpm → shell → `next start` → `next-server` worker) doesn't reliably propagate
+  SIGTERM to the actual `next-server` child process on the Actions Ubuntu runner, so
+  Playwright waits forever for a process that never exits.
+- **Decision:** stop letting Playwright manage the server in CI. The workflow
+  (`.github/workflows/ci.yml`) now starts `corepack pnpm run start` in the
+  background itself, polls `http://127.0.0.1:3000` until it responds, runs
+  `playwright test` directly, and force-kills the server by PID afterwards
+  (`if: always()`, `kill -9`, ignoring failure — the ephemeral runner's own orphan
+  cleanup catches anything left over, as observed when the earlier stuck run was
+  cancelled). `playwright.config.ts`'s `webServer` block is now `undefined` when
+  `process.env.CI` is set; locally it still starts/reuses the dev server as before,
+  since the hang was never reproducible outside GitHub Actions.
+- **Consequence:** CI no longer depends on Playwright's process-group teardown
+  working on the runner's OS/shell stack. Local behavior (`pnpm run test:e2e`) is
+  unchanged.
+
+## ADR-022: Playwright smoke tests mock the API — reduces CI flakiness/dependency on a live backend
 
 - **Context:** the first CI push of the Phase 5 smoke tests (ADR-019 through -021)
-  hung indefinitely on the "Playwright smoke tests" step — no timeout, no error,
-  just stuck past 10 minutes (had to be cancelled manually).
+  hung; at the time this was believed to be caused by a real (unmocked) API call to
+  a nonexistent `localhost:8000` backend never resolving on the Actions runner. That
+  diagnosis turned out to be incomplete — see ADR-023 for the actual root cause,
+  found after mocking alone did not fix the hang. The mocking change itself is still
+  correct on its own merits (below) and was kept.
 - **Decision:** the tests were calling the real (deliberately unmocked)
   `GET /scans` / `GET /ethics` against `localhost:8000`, which has no backend in CI.
   Locally, a refused connection fails in ~2s (confirmed via `curl` and a real

@@ -1,4 +1,4 @@
-FROM golang:1.24-alpine AS tools
+FROM golang:1.25-alpine AS tools
 
 RUN go install -v github.com/projectdiscovery/subfinder/v2/cmd/subfinder@latest
 

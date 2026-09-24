@@ -106,7 +106,7 @@ async def _record_tool_call(
                 sha256=result.sha256,
             )
         )
-    await session.flush()
+    await session.commit()
 
 
 async def _upsert_asset(
@@ -126,7 +126,7 @@ async def _upsert_asset(
         return asset
     asset = Asset(scan_id=scan.id, type=asset_type, value=value, parent_id=parent_id)
     session.add(asset)
-    await session.flush()
+    await session.commit()
     return asset
 
 
@@ -158,7 +158,7 @@ async def _persist_findings(
             )
         )
         count += 1
-    await session.flush()
+    await session.commit()
     return count
 
 
@@ -178,7 +178,7 @@ async def run_passive_scan(
         started_at=datetime.now(UTC),
     )
     session.add(scan)
-    await session.flush()
+    await session.commit()
 
     tool_statuses: dict[str, str] = {}
     assets_by_value: dict[str, Asset] = {}

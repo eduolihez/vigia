@@ -53,6 +53,12 @@ jobs:
         run: corepack pnpm run build
       - name: tsc --noEmit
         run: corepack pnpm run typecheck
+      - name: Install Playwright Chromium
+        run: corepack pnpm exec playwright install --with-deps chromium
+      - name: Playwright smoke tests
+        run: corepack pnpm run test:e2e
+        env:
+          CI: true
 
   docker-build:
     name: Docker image builds

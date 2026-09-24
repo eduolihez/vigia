@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     github_token: str | None = Field(default=None, alias="GITHUB_TOKEN")
     hibp_api_key: str | None = Field(default=None, alias="HIBP_API_KEY")
 
+    # The web GUI's origin(s), for CORS — the browser calls the API directly
+    # (fetch + EventSource), so it needs to be allow-listed explicitly.
+    cors_origins: list[str] = Field(
+        default_factory=lambda: ["http://localhost:3000"], alias="VIGIA_CORS_ORIGINS"
+    )
+
 
 @lru_cache
 def get_settings() -> Settings:

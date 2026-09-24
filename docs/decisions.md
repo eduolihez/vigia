@@ -3,6 +3,88 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
+## ADR-021: create-then-subscribe scan flow, not one-shot streaming, for the GUI
+
+- **Context:** Phase 3's `POST /scans/agent` runs a scan end-to-end within one
+  streamed HTTP request/response — simple, and fine for `curl`, but unusable from a
+  browser GUI: `EventSource` (the browser's native SSE client, needed for
+  `/scans/new` → `/scans/{id}/live`) can only issue GET requests with no body, so it
+  can't POST a domain to start a scan.
+- **Decision:** added a second flow for the GUI: `POST /scans` creates the `Scan`
+  row (status `pending`) and returns its id immediately (no scan runs yet); the
+  browser navigates to `/scans/{id}/live`, which opens `EventSource` against
+  `GET /scans/{id}/stream` — that endpoint lazily starts the orchestrator as a
+  background `asyncio.Task` on first connection and broadcasts its events to every
+  subscriber queue for that scan id. `agent/orchestrator.py`'s `run_agent_scan` was
+  split into `resolve_planner` + `run_agent_scan_for(session, scan, settings)` so
+  both flows share the same orchestration logic without duplicating it.
+- **Consequence:** scan state always lives in the DB, never only in the broadcast
+  queues — a page reload after the stream ends (or was never open) still sees the
+  right state via `GET /scans/{id}` (see ADR-020). `POST /scans/agent` is kept for
+  non-browser callers (`curl`, scripts) since it's simpler for that use case.
+
+## ADR-020: live-scan page checks real status before opening the event stream
+
+- **Context:** live browser testing (not just automated tests) of the create-then-
+  subscribe flow above.
+- **Decision:** reloading `/scans/{id}/live` for a scan that had already finished
+  hung forever on "Waiting for the agent to start…" — its background task was long
+  gone, so `GET /scans/{id}/stream` returned 200 but never emitted anything, and
+  `EventSource` has no way to know the difference between "still starting" and
+  "will never send anything." Fixed by having the live page call
+  `GET /scans/{id}` once on mount; if the scan is already in a terminal status
+  (`completed`/`failed`/`stopped`), it skips opening the `EventSource` entirely and
+  shows that status directly, with a link to the findings page. The dropped-
+  connection handler (`EventSource.onerror`) does the same real-status check before
+  showing a "lost connection" message, since a mid-scan disconnect doesn't mean the
+  scan failed — the orchestrator runs server-side independent of the stream.
+- **Consequence:** caught by dogfooding the actual GUI (via the `/browse` skill)
+  after the happy-path automated tests already passed — a reminder that "the API
+  contract is correct" and "the page is usable after a reload" are different
+  claims, and only one of them shows up in a request/response test.
+
+## ADR-019: TanStack Table pinned to v8, not the newly-released v9
+
+- **Context:** brief section 1 names TanStack Table for the findings table (Phase
+  5). `pnpm add @tanstack/react-table` installed 9.2.4 (the current "latest").
+- **Decision:** v9 turned out to be a from-scratch rewrite — no `useReactTable`
+  export at all (confirmed: build failed with "Export useReactTable doesn't exist,"
+  and the package's export list showed a completely different, feature-composition
+  based API with no equivalent single hook). Learning that new API correctly would
+  have taken meaningfully longer than the findings table itself is worth, for a
+  single sortable/filterable table. Pinned to `@tanstack/react-table@8`
+  (8.21.3) instead — the well-documented, stable hook-based API `useReactTable`
+  actually refers to.
+- **Consequence:** if a future phase wants v9's features, that's a deliberate,
+  separate upgrade — not something to fall into by installing "latest" again.
+
+## ADR-018: SQLite WAL mode + busy_timeout, and commit (not just flush) per write
+
+- **Context:** brief section 1 specifies "SQLite by default (WAL)" — WAL mode was
+  never actually turned on through Phases 1-4, since nothing had needed concurrent
+  DB access yet. Phase 5 (a GUI issuing a scan-creation request while a background
+  scan is mid-run) is the first thing that does.
+- **Decision:** live testing (start a scan via the GUI's new `POST /scans` +
+  `GET /scans/{id}/stream` flow, then fire a second request while the first is
+  running) immediately hit `sqlite3.OperationalError: database is locked`. Root
+  cause was two-fold: (1) SQLite's default rollback-journal mode allows only one
+  writer and blocks everyone else outright; (2) worse, `agent/orchestrator.py` and
+  `pipeline.py` only ever called `session.flush()` during a scan and `commit()`
+  once at the very end — so a single scan held one open write transaction, and thus
+  the write lock, for its *entire* duration (potentially 20 minutes), during which
+  nothing else could write at all. Fixed both: `db/session.py` now sets
+  `PRAGMA journal_mode=WAL` and `PRAGMA busy_timeout=5000` on every SQLite
+  connection (a `sqlalchemy.event` "connect" listener, since aiosqlite doesn't take
+  these as `connect_args`), and every per-item persistence checkpoint in both files
+  (`_upsert_asset`, `_record_tool_call`, `_persist_finding`,
+  `_apply_kev_enrichment`, `_persist_findings`) now calls `commit()` instead of
+  `flush()`.
+- **Consequence:** re-running the same live test after the fix succeeded — a scan
+  creation and a dashboard list request both completed normally while another scan
+  streamed. This also fixes a latent durability bug: a crash mid-scan now loses at
+  most the in-flight tool call instead of the entire scan's progress, since each
+  persisted item is its own committed transaction rather than one multi-minute one.
+
 ## ADR-017: Report Validator also checks claimed counts ("cifras"), keyword-anchored
 
 - **Context:** brief section 7.2 says the Report Validator extracts "domains, IPs,

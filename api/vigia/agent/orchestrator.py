@@ -429,7 +429,7 @@ class AgentOrchestrator:
             return asset
         asset = Asset(scan_id=self.scan.id, type=asset_type, value=value, parent_id=parent_id)
         self.session.add(asset)
-        await self.session.flush()
+        await self.session.commit()
         return asset
 
     async def _record_tool_call(
@@ -456,7 +456,7 @@ class AgentOrchestrator:
                     sha256=result.sha256,
                 )
             )
-        await self.session.flush()
+        await self.session.commit()
         if result.error is None:
             for f in result.findings_candidates:
                 if f.cve:
@@ -480,7 +480,7 @@ class AgentOrchestrator:
             cve=candidate.cve,
         )
         self.session.add(finding)
-        await self.session.flush()
+        await self.session.commit()
         return finding
 
     async def _apply_kev_enrichment(self, result: tools_base.ToolResult) -> None:
@@ -500,7 +500,7 @@ class AgentOrchestrator:
                 finding.kev = bool(entry.get("in_kev", False))
                 finding.known_ransomware = bool(entry.get("known_ransomware", False))
                 finding.epss = entry.get("epss")
-        await self.session.flush()
+        await self.session.commit()
 
     async def _finish(self) -> None:
         self.scan.status = ScanStatus.COMPLETED
@@ -544,6 +544,32 @@ class AgentOrchestrator:
         return f"Assets discovered: {parts or 'none yet'}."
 
 
+async def resolve_planner(settings: Settings, model_override: str | None = None) -> str:
+    """The model `AgentOrchestrator` should use: `model_override` if given, else the
+    configured planner model if it's installed and tool-capable, else a fallback
+    (brief section 2). Split out so callers that pre-create their own `Scan` row
+    (the API, for a scan started from the GUI) can resolve+store the model choice
+    before the orchestrator loop starts."""
+    if model_override:
+        return model_override
+    availability = await check_model_availability(settings.ollama_host, settings.planner_model)
+    return availability.chosen
+
+
+async def run_agent_scan_for(
+    session: AsyncSession, scan: Scan, settings: Settings
+) -> AsyncGenerator[AgentEvent]:
+    """Drive `AgentOrchestrator.run()` for an already-created `Scan` row (its
+    `planner_model` is used as-is — resolve it with `resolve_planner` first)."""
+    async with httpx.AsyncClient(timeout=tools_base.DEFAULT_TIMEOUT_SECONDS) as client:
+        planner = PlannerClient(host=settings.ollama_host, model=scan.planner_model)
+        orchestrator = AgentOrchestrator(
+            session, scan, settings, client, planner, max_deep_dives=settings.scan_max_deep_dives
+        )
+        async for event in orchestrator.run():
+            yield event
+
+
 async def run_agent_scan(
     session: AsyncSession,
     domain: str,
@@ -556,8 +582,7 @@ async def run_agent_scan(
     `EthicsNoticeNotAccepted` if the first-run notice hasn't been accepted."""
     await ensure_accepted(session)
 
-    availability = await check_model_availability(settings.ollama_host, settings.planner_model)
-    planner_model = model_override or availability.chosen
+    planner_model = await resolve_planner(settings, model_override)
 
     scan = Scan(
         domain=domain,
@@ -568,12 +593,7 @@ async def run_agent_scan(
         started_at=datetime.now(UTC),
     )
     session.add(scan)
-    await session.flush()
+    await session.commit()
 
-    async with httpx.AsyncClient(timeout=tools_base.DEFAULT_TIMEOUT_SECONDS) as client:
-        planner = PlannerClient(host=settings.ollama_host, model=planner_model)
-        orchestrator = AgentOrchestrator(
-            session, scan, settings, client, planner, max_deep_dives=settings.scan_max_deep_dives
-        )
-        async for event in orchestrator.run():
-            yield event
+    async for event in run_agent_scan_for(session, scan, settings):
+        yield event

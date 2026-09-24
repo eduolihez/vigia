@@ -4,9 +4,9 @@
 
 *[Versión en español](README.es.md)*
 
-**Status: Phase 4 of 9 done** (Base, Passive tools, Agent, Risk & Report). CLI-usable
-end to end for passive scans; no GUI yet. See [CLAUDE.md](CLAUDE.md) for exact phase
-status and commands.
+**Status: Phase 5 of 9 done** (Base, Passive tools, Agent, Risk & Report, GUI core).
+Usable end to end for passive scans, from either the CLI or the web dashboard. See
+[CLAUDE.md](CLAUDE.md) for exact phase status and commands.
 
 ## What is Vigía?
 

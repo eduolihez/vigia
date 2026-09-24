@@ -56,7 +56,26 @@ The REPORT phase in the Phase 3 agent still auto-advances (no-op) rather than
 calling the Report Writer inline — wiring that in is a small follow-up, not urgent
 since `vigia report` already works standalone against any completed scan.
 
-No real GUI yet — that's Phases 5–6.
+**Phase 5 (GUI core) — done.** Next.js dark SOC-console UI: dashboard (`/`, recent
+scans + top-risk-domains), new scan (`/scans/new`, with the ethical-use notice gate),
+live view (`/scans/[id]/live`, real SSE via `EventSource` — phase bar, event
+timeline, Stop button), findings (`/scans/[id]/findings`, TanStack Table v8 —
+sortable/filterable, row click opens an evidence drawer). New GUI-facing API surface:
+`POST /scans`, `GET /scans`, `GET /scans/{id}`, `GET /scans/{id}/findings`,
+`GET /scans/{id}/stream` (create-then-subscribe, since browser `EventSource` can't
+POST — ADR-021), `DELETE /scans/{id}` (stop), `GET/POST /ethics`, plus CORS. 5
+Playwright smoke tests green (`web/tests/e2e/smoke.spec.ts`).
+
+Dogfooded the actual GUI end to end via the `/browse` skill against a real API +
+Ollama (not just automated tests) — launched a scan from the form, followed it live,
+verified the findings table and evidence drawer, tested Stop. That session surfaced
+and fixed two real bugs: (1) SQLite `database is locked` under concurrent requests —
+the orchestrator/pipeline held one open transaction for an entire scan instead of
+committing per item; fixed with WAL mode + per-item commits (ADR-018). (2) Reloading
+a live-scan page for an already-finished scan hung forever waiting for events that
+would never come; fixed by checking real status before opening the stream (ADR-020).
+
+No graph, report viewer, settings, or audit UI yet — that's Phase 6.
 
 ## Commands
 
@@ -96,6 +115,8 @@ corepack pnpm run typecheck   # tsc --noEmit (run `build` at least once first �
                                #  it generates Next.js's ambient route types)
 corepack pnpm run format      # Prettier --write
 corepack pnpm run format:check
+corepack pnpm run test:e2e    # Playwright smoke tests (builds+serves the app itself
+                               #  unless a dev/prod server is already on :3000)
 ```
 
 ### Everything together
@@ -137,7 +158,9 @@ vigia/
 │                   pipeline.py is the deterministic `vigia scan` pipeline;
 │                   agent/ is the Phase 3 LLM orchestrator (see agent/orchestrator.py);
 │                   risk/ + report/ are the Phase 4 Risk Engine and Report Writer
-├── web/             Next.js frontend
+├── web/             Next.js frontend — app/ has the Phase 5 routes (dashboard,
+│                   scans/new, scans/[id]/live, scans/[id]/findings);
+│                   lib/api.ts is the API client; tests/e2e/ is the Playwright suite
 ├── eval/            Benchmark lab, ground truth, results (Phase 8)
 ├── docs/            architecture.md, ethics.md, decisions.md (ADRs)
 ├── docker-compose.yml / docker-compose.gpu.yml

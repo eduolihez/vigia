@@ -4,9 +4,10 @@
 
 *[English version](README.md)*
 
-**Estado: Fase 4 de 9 completada** (Base, Tools pasivas, Agente, Riesgo e Informe).
-Usable de punta a punta por CLI para escaneos pasivos; todavía sin GUI. Consulta
-[CLAUDE.md](CLAUDE.md) para el estado exacto y los comandos disponibles.
+**Estado: Fase 5 de 9 completada** (Base, Tools pasivas, Agente, Riesgo e Informe,
+GUI núcleo). Usable de punta a punta para escaneos pasivos, tanto por CLI como desde
+el panel web. Consulta [CLAUDE.md](CLAUDE.md) para el estado exacto y los comandos
+disponibles.
 
 ## ¿Qué es Vigía?
 

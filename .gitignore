@@ -20,6 +20,9 @@ web/.next/
 web/out/
 web/*.tsbuildinfo
 web/next-env.d.ts
+web/test-results/
+web/playwright-report/
+web/blob-report/
 
 # --- Editors / OS ---------------------------------------------------------------
 .DS_Store

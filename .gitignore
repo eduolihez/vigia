@@ -1,0 +1,27 @@
+# --- Env / secrets ----------------------------------------------------------
+.env
+.env.local
+
+# --- Python (api/) ------------------------------------------------------------
+api/.venv/
+__pycache__/
+*.pyc
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.db
+*.db-shm
+*.db-wal
+
+# --- Node (web/) --------------------------------------------------------------
+web/node_modules/
+web/.next/
+web/out/
+web/*.tsbuildinfo
+web/next-env.d.ts
+
+# --- Editors / OS ---------------------------------------------------------------
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json

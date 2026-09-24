@@ -1,0 +1,60 @@
+[project]
+name = "vigia"
+version = "0.1.0"
+description = "Vigía — External Attack Surface Management OSINT agent powered by a local LLM"
+requires-python = ">=3.12"
+license = { text = "MIT" }
+dependencies = [
+  "fastapi>=0.115",
+  "uvicorn[standard]>=0.32",
+  "pydantic>=2.9",
+  "pydantic-settings>=2.6",
+  "sqlmodel>=0.0.22",
+  "sqlalchemy>=2.0",
+  "alembic>=1.14",
+  "httpx>=0.27",
+  "ollama>=0.4",
+  "typer>=0.13",
+  "cryptography>=43.0",
+  "aiosqlite>=0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+  "ruff>=0.7",
+  "mypy>=1.13",
+  "pytest>=8.3",
+  "pytest-asyncio>=0.24",
+  "respx>=0.21",
+]
+
+[project.scripts]
+vigia = "vigia.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["vigia"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+extend-exclude = ["vigia/db/migrations/versions"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "ASYNC"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = []
+
+[[tool.mypy.overrides]]
+module = "ollama.*"
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

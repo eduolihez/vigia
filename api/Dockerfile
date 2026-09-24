@@ -9,7 +9,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     UV_LINK_MODE=copy
 
 RUN pip install --no-cache-dir uv==0.12.18
-COPY --from=tools /root/go/bin/subfinder /usr/local/bin/subfinder
+COPY --from=tools /go/bin/subfinder /usr/local/bin/subfinder
 
 WORKDIR /app
 

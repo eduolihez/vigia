@@ -22,9 +22,7 @@ DEFAULT_MAX_LEN = 500
 # Role markers and common jailbreak/override phrasings, case-insensitive. Matched
 # fragments are replaced with a neutral marker, not deleted, so the redaction itself
 # doesn't create new exploitable ambiguity.
-_ROLE_MARKER_RE = re.compile(
-    r"(^|\n|[<>.!?]\s*)\s*(system|assistant|user|tool)\s*:", re.IGNORECASE
-)
+_ROLE_MARKER_RE = re.compile(r"(^|\n|[<>.!?]\s*)\s*(system|assistant|user|tool)\s*:", re.IGNORECASE)
 _OVERRIDE_PHRASES_RE = re.compile(
     r"ignor[ae]\s+(all\s+|previous\s+|prior\s+)*(the\s+)?(previous\s+|prior\s+)?instructions"
     r"|ignora\s+(todas\s+)?las\s+instrucciones\s+(anteriores|previas)"

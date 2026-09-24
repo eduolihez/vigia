@@ -38,9 +38,25 @@ CLI. Verified live against a real local Ollama instance (not just mocks) — one
 suite: 17 payloads (brief requires ≥15), 0% success, plus 7 structural-enforcement
 tests (`api/tests/injection/`).
 
-No risk engine, report, or real GUI yet — those land in Phases 4–6. Report Writer/
-Validator don't exist, so the REPORT phase auto-advances (no-op) for now; findings
-still carry Phase 2's placeholder severity (ADR-005).
+**Phase 4 (Risk & Report) — done.** Deterministic Risk Engine
+(`api/vigia/risk/engine.py` + `weights.yaml`): `score = base × kev_mult × (1+epss) ×
+exposure_factor`, base score from real NVD CVSS when a CVE is known (ADR-014) or a
+per-finding-type weight otherwise, replacing the Phase 2/3 placeholder severity —
+`vigia score <scan_id>`. Report Writer (`report/writer.py`) drafts a report from a
+scan's evidence via the planner's structured JSON output; Report Validator
+(`report/validator.py`) extracts every domain/IP/CVE/port mentioned and rejects
+anything not present in that scan's own evidence — up to 2 regenerations with the
+violation fed back, then the offending item (not the whole report) is dropped and
+logged. Exporters for Markdown, JSON, and PDF (`report/exporters/`) —
+`vigia report <scan_id> --format md|json|pdf`. PDF renders via Playwright/headless
+Chromium, not WeasyPrint (which failed to import locally — ADR-016); verified with a
+real generated PDF, not a mock.
+
+The REPORT phase in the Phase 3 agent still auto-advances (no-op) rather than
+calling the Report Writer inline — wiring that in is a small follow-up, not urgent
+since `vigia report` already works standalone against any completed scan.
+
+No real GUI yet — that's Phases 5–6.
 
 ## Commands
 
@@ -60,6 +76,8 @@ uv run vigia scan <domain> --agent  # LLM-driven agent (Phase 3); needs Ollama r
                                      #  and OLLAMA_HOST/VIGIA_PLANNER_MODEL configured
                                      #  (or pass --model to override for one scan)
 uv run vigia ethics --accept        # required once before any scan will run
+uv run vigia score <scan_id>        # (re)score findings with the Risk Engine (Phase 4)
+uv run vigia report <scan_id> --format md|json|pdf --out <path>  # generate a report
 ```
 
 ### Frontend (`web/`)
@@ -117,7 +135,8 @@ vigia/
 ├── api/            FastAPI backend (vigia/ package: agent, tools, risk, report, db, api)
 │                   tools/ has 13 passive wrappers + kev_epss_enrich (Phase 2);
 │                   pipeline.py is the deterministic `vigia scan` pipeline;
-│                   agent/ is the Phase 3 LLM orchestrator (see agent/orchestrator.py)
+│                   agent/ is the Phase 3 LLM orchestrator (see agent/orchestrator.py);
+│                   risk/ + report/ are the Phase 4 Risk Engine and Report Writer
 ├── web/             Next.js frontend
 ├── eval/            Benchmark lab, ground truth, results (Phase 8)
 ├── docs/            architecture.md, ethics.md, decisions.md (ADRs)

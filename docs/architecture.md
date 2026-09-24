@@ -1,32 +1,82 @@
 # Architecture
 
-> Skeleton — filled in as each phase lands. See the root `CLAUDE.md` for the current
-> phase status and `docs/decisions.md` for the reasoning behind specific choices.
+> See the root `CLAUDE.md` for current phase status and `docs/decisions.md` for the
+> reasoning behind specific choices (ADRs).
 
 ## Overview
 
 ```
 web (Next.js)  ──SSE/REST──►  api (FastAPI)
                                 ├─ agent/orchestrator   state-machine loop        [Phase 3]
-                                ├─ agent/scope_guard     allowlist + ownership     [Phase 3]
-                                ├─ agent/tool_router     schemas, rate limits      [Phase 3]
+                                ├─ agent/scope_guard     allowlist enforcement     [Phase 3]
                                 ├─ agent/sanitizer       untrusted OSINT data      [Phase 3]
+                                ├─ agent/tool_router      phase allowlist + exec   [Phase 3]
+                                ├─ agent/llm_client       Ollama chat/tool-calling [Phase 3]
                                 ├─ tools/*               one wrapper per source    [Phase 2]
-                                ├─ risk/engine           CVSS + KEV + EPSS         [Phase 4]
-                                ├─ report/writer         LLM → draft report        [Phase 4]
-                                ├─ report/validator      entity/evidence check     [Phase 4]
-                                └─ db/                   models + repositories     [Phase 1]
-                              ollama (planner + extractor)
+                                ├─ pipeline.py            deterministic passive    [Phase 2]
+                                ├─ risk/engine            CVSS + KEV + EPSS        [Phase 4]
+                                ├─ report/writer          LLM → draft report       [Phase 4]
+                                ├─ report/validator       entity/evidence check    [Phase 4]
+                                ├─ report/exporters/      Markdown, JSON, PDF      [Phase 4]
+                                ├─ ethics.py               first-run notice gate   [Phase 3]
+                                └─ db/                    models + migrations     [Phase 1]
+                              ollama (planner model; extractor unused so far)
 ```
 
-## Phase 1 (current)
+Design principle throughout: the LLM (planner, via Ollama) **decides and drafts** —
+which tool to call next, when a phase is done, what a report should say. Everything
+else — validating that decision, executing it, persisting evidence, scoring risk,
+checking a report's claims against real evidence — is deterministic Python. The LLM
+never runs arbitrary commands and never builds tool arguments outside a fixed
+Pydantic schema.
 
-- `api/`: FastAPI app with a single `/health` endpoint, SQLModel schema for all core
-  entities (`Scan`, `Asset`, `Finding`, `Evidence`, `ToolCall`, `Setting`, `ApiKey`),
-  Alembic migrations.
-- `web/`: Next.js (App Router, TypeScript strict, Tailwind) placeholder page + health
-  route. No real UI yet.
-- `docker-compose.yml`: `ollama`, `api`, `web` services.
+## Data flow, end to end (current state)
 
-Data model, agent design and risk/report design will be documented here in detail as
-Phases 3–4 implement them.
+1. **`vigia scan <domain>`** (deterministic, `pipeline.py`) or **`vigia scan
+   <domain> --agent`** (LLM-driven, `agent/orchestrator.py`) creates a `Scan` row
+   and runs passive tools, persisting `Asset`, `Finding` (placeholder severity),
+   `Evidence`, and `ToolCall` (audit) rows as it goes. The agent path also emits
+   `AgentEvent`s (SSE-ready) at each step.
+2. **`vigia score <scan_id>`** (`risk/engine.py`) re-scores every `Finding` for that
+   scan in place: `score = base × kev_mult × (1+epss) × exposure_factor`, with real
+   CVSS from NVD when a CVE is known.
+3. **`vigia report <scan_id> --format md|json|pdf`** (`report/writer.py` +
+   `validator.py` + `exporters/`) drafts a report from the scan's evidence via the
+   planner's structured JSON output, validates every domain/IP/CVE/port/count it
+   claims against that evidence (regenerating or dropping anything invented), and
+   exports it.
+
+None of these three steps require the others to have just run — each reads whatever
+state exists in the DB for that `scan_id`. A typical flow is scan → score → report,
+but re-running `score` or `report` on an already-scored/reported scan is always safe
+(idempotent overwrite, not additive).
+
+## Phase-by-phase notes
+
+- **Phase 1:** FastAPI skeleton, full SQLModel schema (`Scan`, `Asset`, `Finding`,
+  `Evidence`, `ToolCall`, `Setting`, `ApiKey`) implemented up front (ADR-002) rather
+  than incrementally, since every later phase needed at least one of these tables.
+- **Phase 2:** 13 passive tool wrappers behind a common `ToolResult`/`ToolSpec`
+  contract (`tools/base.py`), run in a fixed order by `pipeline.py`.
+- **Phase 3:** `agent/orchestrator.py` drives the VERIFY→SEED→ENUMERATE→RESOLVE→
+  EXPOSURE→EMAIL_AND_SPOOFING→LEAKS→RISK→REPORT→DONE state machine (`agent/
+  phases.py::PHASE_TOOLS` maps phases to allowed tools — ADR-009). `scope_guard.py`
+  and `sanitizer.py` are the two guardrails tested directly by the prompt-injection
+  suite (`tests/injection/`); `tool_router.py` is the single chokepoint every tool
+  call passes through (phase allowlist, then Scope Guard, then execution).
+- **Phase 4:** `risk/engine.py` is a pure scoring function (`score_finding`) plus a
+  thin DB-updating wrapper (`score_scan_findings`); `report/validator.py`'s
+  `EvidenceBase` is built fresh from the scan's `Asset`/`Finding` rows each time a
+  report is validated, so it can never drift from what's actually in the database.
+
+## Not yet built
+
+- **Report Writer isn't wired into the agent's REPORT phase** — it auto-advances
+  (no-op) for now; `vigia report` works standalone against any completed scan.
+- **No GUI** (Phases 5–6): the API surface today is intentionally minimal (`/health`,
+  `/scans/agent` SSE, `/scans/{id}/audit`) — just enough to prove the SSE/audit
+  mechanisms work over HTTP, not the full dashboard/graph/report-viewer routes.
+- **No active-mode tools** (`http_probe`, `screenshot`, `tls_check` — Phase 7):
+  `agent/ownership.py` (TXT-record verification) exists but nothing consumes it yet.
+- **`eval/` benchmarking harness** (Phase 8) and the polished README/docs pass
+  (Phase 9) haven't started.

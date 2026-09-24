@@ -4,8 +4,9 @@
 
 *[Versión en español](README.es.md)*
 
-**Status: Phase 1 of 9 (Base) — early scaffolding, not yet functional.** See
-[CLAUDE.md](CLAUDE.md) for current phase status and commands.
+**Status: Phase 4 of 9 done** (Base, Passive tools, Agent, Risk & Report). CLI-usable
+end to end for passive scans; no GUI yet. See [CLAUDE.md](CLAUDE.md) for exact phase
+status and commands.
 
 ## What is Vigía?
 

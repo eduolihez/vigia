@@ -1,0 +1,48 @@
+# Risk Engine weights (brief section 7). version 1 (2026-09-24).
+#
+# score = base × kev_mult × (1 + epss) × exposure_factor
+#
+# base: CVSS v3 base score (fetched from NVD) when the finding has a CVE; otherwise
+# looked up here by finding "type". These are judgment calls calibrated against the
+# brief's own examples (takeover ~9.0, DMARC absent ~6.5, leaked secret ~8.5, exposed
+# admin port ~7.0) and documented as ADR-014 in docs/decisions.md.
+
+base_scores:
+  dangling_dns_candidate: 9.0
+  github_leak_candidate: 8.5
+  breach_exposure: 5.5
+  dmarc_missing: 6.5
+  dmarc_policy_none: 5.0
+  spf_missing: 4.0
+  dkim_not_found: 3.0
+  typosquat: 2.0
+  network_info: 1.0
+  # Fallback if a `known_vulnerability` finding's CVE isn't found in NVD.
+  known_vulnerability: 5.0
+
+default_base_score: 3.0
+
+kev_multiplier: 1.5
+kev_ransomware_multiplier: 1.8
+
+# Case-insensitive substring match against the finding's associated asset value
+# (hostname/URL). First match wins; unmatched assets use default_exposure_factor.
+exposure_keywords:
+  admin: 1.4
+  login: 1.3
+  dev: 1.3
+  develop: 1.3
+  staging: 1.3
+  stage: 1.3
+  internal: 1.2
+  vpn: 1.2
+  test: 1.2
+
+default_exposure_factor: 1.0
+
+# score >= threshold -> that severity; below "low" -> info.
+severity_thresholds:
+  critical: 8.0
+  high: 6.0
+  medium: 3.5
+  low: 1.5

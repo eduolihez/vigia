@@ -152,6 +152,7 @@ async def _persist_findings(
                 explanation=candidate.detail,
                 remediation=PLACEHOLDER_REMEDIATION,
                 kev=bool(enrichment.get("in_kev", False)),
+                known_ransomware=bool(enrichment.get("known_ransomware", False)),
                 epss=enrichment.get("epss"),  # type: ignore[arg-type]
                 cve=candidate.cve,
             )

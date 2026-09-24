@@ -3,6 +3,78 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
+## ADR-017: Report Validator also checks claimed counts ("cifras"), keyword-anchored
+
+- **Context:** brief section 7.2 says the Report Validator extracts "domains, IPs,
+  CVEs, ports, figures" — the validator initially only checked the first four.
+- **Decision:** a real live report generation against a real scan (105 typosquat
+  findings for `example.com`) surfaced exactly this gap: the LLM wrote "37 potential
+  look-alike domain names" — no invented domain/IP/CVE/port, so the original
+  validator passed it, but the number was simply wrong (105, not 37). Added a
+  narrow, keyword-anchored count check: a number is only validated when it appears
+  near one of a fixed set of countable-noun phrases (`look-alike domain(s)`,
+  `subdomain(s)`, `finding(s)`, `vulnerabilit(y/ies)`/`CVE(s)`), each mapped to a
+  real count computed from the scan's evidence (`EvidenceBase.counts`). Deliberately
+  narrow rather than "flag any number not equal to some count" — that would false-
+  positive on ordinary prose ("the 3rd time", severity scores, dates).
+- **Consequence:** re-running the same real report generation after this fix
+  produced a report with the correct count and no regeneration needed — see the
+  regression test `test_wrong_typosquat_count_is_flagged` in
+  `tests/unit/report/test_validator.py`, taken directly from the live output.
+
+## ADR-016: PDF export via Playwright (headless Chromium), not WeasyPrint
+
+- **Context:** brief section 7.4 allows either WeasyPrint or Playwright for PDF
+  export.
+- **Decision:** tried WeasyPrint first (it's the brief's first-listed option) and
+  verified live: it failed to import on this Windows dev machine —
+  `OSError: cannot load library 'libgobject-2.0-0'` — because it needs system
+  GTK/Pango/Cairo libraries that aren't part of a normal Python install. Playwright
+  bundles its own Chromium and rendered a real PDF successfully on the same machine
+  with no extra setup beyond `playwright install chromium`. Switched to Playwright;
+  `api/Dockerfile` and CI now run that install step (Chromium + its Linux system
+  deps via `--with-deps`) so the Docker image and CI have the same capability.
+- **Consequence:** the PDF exporter renders the same Markdown the `.md` exporter
+  produces (wrapped in minimal HTML/CSS), so there's exactly one place report layout
+  lives, and the PDF test in `tests/unit/report/test_exporters.py` generates a real
+  PDF, not a mock.
+
+## ADR-015: `Finding.known_ransomware` added as a real column, not recomputed
+
+- **Context:** the Risk Engine's `kev_mult` needs 1.8 when a CVE is used in
+  ransomware, per brief section 7. Phase 2/3's `kev_epss_enrich` tool already
+  computes this (`known_ransomware` in its enrichment payload) but the pipeline and
+  orchestrator were only copying `in_kev` and `epss` onto the `Finding` row, silently
+  dropping the ransomware flag.
+- **Decision:** added `Finding.known_ransomware: bool` (migration
+  `964300d982ea_add_finding_known_ransomware`, `server_default=false` so it's safe
+  on non-empty tables) and updated both scan paths to persist it. The Risk Engine
+  reads it directly from the `Finding` row rather than re-fetching/re-parsing the
+  KEV catalog at scoring time.
+- **Consequence:** re-running `vigia score <scan_id>` on scans created before this
+  migration will show `known_ransomware=False` for all their findings (the flag
+  wasn't captured at scan time) — acceptable for a pre-release project; would need a
+  backfill (re-run `kev_epss_enrich`) if this mattered for real historical data.
+
+## ADR-014: CVSS scores come from the NVD CVE API, not the brief's tool list
+
+- **Context:** brief section 7's Risk Engine formula uses "CVSS if there's a CVE" as
+  the base score, but the brief's tool table (section 4) has no CVSS-lookup tool —
+  `shodan_internetdb` and `kev_epss_enrich` supply a CVE id but not its CVSS score.
+- **Decision:** added a small NVD CVE API v2.0 lookup
+  (`https://services.nvd.nist.gov/rest/json/cves/2.0?cveId=...`) inside
+  `risk/engine.py`, not as a registered agent tool — it's scoring infrastructure the
+  planner never decides to invoke, not an OSINT reconnaissance step. Verified live
+  against `CVE-2021-44228`; prefers `cvssMetricV31`, then `V30`, then `V2`. Disk-cached
+  per CVE for 7 days (CVSS base scores are essentially immutable once published) and
+  rate-limited to ~1 request/6.5s to respect NVD's public (no API key) limit of
+  5 requests/30s. A CVE that NVD doesn't have (or a request that fails) falls back to
+  `weights.yaml`'s flat `known_vulnerability` base score rather than blocking scoring.
+- **Consequence:** scoring a scan with many distinct CVEs is slow (the rate limit
+  dominates) — acceptable for a report generated once per scan, not on a hot path.
+  An NVD API key (not yet wired up) would raise the limit to 50/30s if this becomes
+  a bottleneck.
+
 ## ADR-013: model availability check calls `show()` per model, not `list()`
 
 - **Context:** brief section 2 requires checking which Ollama models are installed

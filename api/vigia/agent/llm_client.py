@@ -35,6 +35,15 @@ class Planner(Protocol):
     ) -> PlannerToolCall: ...
 
 
+class StructuredGenerator(Protocol):
+    """What the Report Writer (Phase 4) needs from a planner — satisfied by
+    `OllamaStructuredGenerator` and, in tests, by a scripted fake."""
+
+    async def generate(
+        self, *, system_prompt: str, user_message: str, json_schema: dict[str, Any]
+    ) -> str: ...
+
+
 @dataclass
 class ModelAvailability:
     configured: str
@@ -96,3 +105,28 @@ class PlannerClient:
         args = dict(call.arguments)
         reason = str(args.pop("reason", ""))
         return PlannerToolCall(tool=call.name, args=args, reason=reason)
+
+
+class OllamaStructuredGenerator:
+    """Structured (JSON-schema-constrained) generation, for the Report Writer.
+
+    Verified live 2026-09-24: `chat(..., format=<json schema dict>)` makes Ollama
+    return `message.content` as a JSON string matching the schema.
+    """
+
+    def __init__(self, host: str, model: str) -> None:
+        self._client = ollama.AsyncClient(host=host)
+        self.model = model
+
+    async def generate(
+        self, *, system_prompt: str, user_message: str, json_schema: dict[str, Any]
+    ) -> str:
+        response = await self._client.chat(
+            model=self.model,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_message},
+            ],
+            format=json_schema,
+        )
+        return response.message.content or ""

@@ -21,6 +21,8 @@ jobs:
           cache-dependency-glob: "api/uv.lock"
       - name: Install dependencies
         run: uv sync --extra dev
+      - name: Install Playwright Chromium (PDF export tests)
+        run: uv run playwright install --with-deps chromium
       - name: Ruff
         run: uv run ruff check .
       - name: mypy --strict

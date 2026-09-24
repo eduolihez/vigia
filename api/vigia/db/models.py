@@ -97,6 +97,7 @@ class Finding(SQLModel, table=True):
     explanation: str
     remediation: str
     kev: bool = Field(default=False)
+    known_ransomware: bool = Field(default=False)
     epss: float | None = Field(default=None)
     cve: str | None = Field(default=None)
     created_at: datetime = Field(default_factory=_now)

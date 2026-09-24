@@ -475,6 +475,7 @@ class AgentOrchestrator:
             explanation=candidate.detail,
             remediation=PLACEHOLDER_REMEDIATION,
             kev=bool(enrichment.get("in_kev", False)),
+            known_ransomware=bool(enrichment.get("known_ransomware", False)),
             epss=enrichment.get("epss"),
             cve=candidate.cve,
         )
@@ -497,6 +498,7 @@ class AgentOrchestrator:
             entry = entries.get(finding.cve or "")
             if entry:
                 finding.kev = bool(entry.get("in_kev", False))
+                finding.known_ransomware = bool(entry.get("known_ransomware", False))
                 finding.epss = entry.get("epss")
         await self.session.flush()
 

@@ -12,6 +12,7 @@ __pycache__/
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
 
 # --- Node (web/) --------------------------------------------------------------
 web/node_modules/

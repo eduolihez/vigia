@@ -3,6 +3,29 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
+## ADR-022: Playwright smoke tests mock the API — a real backend call hung CI
+
+- **Context:** the first CI push of the Phase 5 smoke tests (ADR-019 through -021)
+  hung indefinitely on the "Playwright smoke tests" step — no timeout, no error,
+  just stuck past 10 minutes (had to be cancelled manually).
+- **Decision:** the tests were calling the real (deliberately unmocked)
+  `GET /scans` / `GET /ethics` against `localhost:8000`, which has no backend in CI.
+  Locally, a refused connection fails in ~2s (confirmed via `curl` and a real
+  browser) — but the GitHub Actions runner apparently doesn't send TCP RST for a
+  refused `localhost` connection the same way, so the browser's `fetch()` never
+  settles, and Playwright's page/context teardown seems to wait on that pending
+  request before a test can be marked complete. Rather than chase that
+  environment-specific networking behavior further, every API call in the smoke
+  suite is now mocked via `page.route()` — no real network attempt, deterministic,
+  and ~7x faster (2.7s for 6 tests vs. never finishing). One route pattern
+  (`**/scans/*/findings`) had to be scoped to the API's own origin, since the
+  broader glob also matched the test's own page navigation
+  (`/scans/does-not-exist/findings`) and replaced the HTML page with the mocked
+  JSON instead of letting it render.
+- **Consequence:** these smoke tests verify the pages render/navigate/use real
+  response shapes correctly — not live backend integration, which needs Ollama and
+  stays a manual verification step (documented in CLAUDE.md), not a CI job.
+
 ## ADR-021: create-then-subscribe scan flow, not one-shot streaming, for the GUI
 
 - **Context:** Phase 3's `POST /scans/agent` runs a scan end-to-end within one

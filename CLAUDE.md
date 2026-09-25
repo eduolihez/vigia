@@ -126,6 +126,18 @@ silently skipping unrelated later phases — fixed (ADR-035) and covered by a
 dedicated orchestrator test, since a scripted-planner test would never have hit it.
 170 backend tests green (up from 160).
 
+**Phase 9 (Polish & docs) — done.** README.md/README.es.md rewritten for a real
+reader landing on the repo (badges, a Quickstart, a Mermaid architecture diagram,
+a guardrails/ethics summary, a highlights list) rather than the Phase 1 skeleton;
+`docs/ethics.md` replaced its Phase-1-through-8 placeholder with the actual policy
+— permitted use, what Vigía won't do, a guardrail-to-code table, the literal
+first-run consent text, data handling, and the legal disclaimer. Fixed a real
+`docker compose up` gap found while writing the Quickstart: the API container never
+ran `alembic upgrade head` on start, so a fresh stack booted against an unmigrated
+database (`/health` reported healthy anyway — its check is a bare `SELECT 1`) and
+every real request 500'd; `api/Dockerfile`'s `CMD` now runs the migration before
+`uvicorn` starts.
+
 ## Commands
 
 ### Backend (`api/`)

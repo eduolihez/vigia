@@ -3,6 +3,28 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
+## ADR-036: the API container runs migrations on start
+
+- **Context:** writing Phase 9's Quickstart section meant actually re-reading
+  `api/Dockerfile` with a first-time-user's eyes — its `CMD` ran `uvicorn` directly,
+  with no `alembic upgrade head` step anywhere in the image or compose setup. A fresh
+  `docker compose up` therefore boots the API against a database with no tables.
+  `GET /health` doesn't catch this: its check is a bare `SELECT 1`, which succeeds
+  with no `FROM` clause regardless of schema state, so the container reports healthy
+  while every real endpoint (`/scans`, `/settings`, ...) would 500 with "no such
+  table". This is the same class of gap a live sanity check earlier in development
+  (Phase 6) hit directly against a local dev database, but it had never been checked
+  against the *container* image specifically until now.
+- **Decision:** `api/Dockerfile`'s `CMD` is now
+  `sh -c "uv run alembic upgrade head && uv run uvicorn ..."` — migrations run once,
+  synchronously, before the server starts accepting requests. No separate init
+  container or compose `depends_on: condition: service_completed_successfully` — a
+  single container running its own migration first is simpler and sufficient at this
+  project's scale (SQLite by default, one API replica).
+- **Consequence:** `docker compose up` now genuinely satisfies Phase 1's original
+  acceptance criterion ("the 3 services come up, CI is green") for a *fresh* stack,
+  not just one someone had already migrated manually during development.
+
 ## ADR-035: a stalled ENUMERATE phase skips itself, not the rest of the scan
 
 - **Context:** found live by the Phase 8 benchmark lab, not by inspection: running

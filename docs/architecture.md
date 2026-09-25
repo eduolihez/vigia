@@ -22,6 +22,7 @@ web (Next.js)  ──SSE/REST──►  api (FastAPI)
                                 ├─ ethics.py               first-run notice gate   [Phase 3]
                                 ├─ settings_store.py       runtime overrides       [Phase 6]
                                 ├─ crypto.py               API-key encryption      [Phase 6]
+                                ├─ eval/                   benchmark lab           [Phase 8]
                                 └─ db/                    models + migrations     [Phase 1]
                               ollama (planner model; extractor unused so far)
 ```
@@ -89,11 +90,17 @@ but re-running `score` or `report` on an already-scored/reported scan is always 
   *candidate* into a confirmed `dangling_dns_confirmed` finding by checking the live
   response body against `fingerprints/takeover_signatures.yaml`, independent of the
   original CNAME match (ADR-031).
+- **Phase 8:** `api/vigia/eval/` (`lab.py`/`scenarios.py`/`runner.py`) drives the
+  real orchestrator/planner/report-writer with every tool call scripted at the
+  `tool_router.INVOKERS` seam — the same one `tests/integration/test_orchestrator.py`
+  uses — so the benchmark exercises real agent behavior without a real domain
+  (ADR-034). Running it for real is what actually caught ADR-035's bug (the
+  no-new-assets early-stop aborting the whole scan, not just the stalled phase) —
+  worth noting as the concrete case for *why* this phase exists, not just a checkbox.
 
 ## Not yet built
 
 - **Report Writer isn't wired into the agent's REPORT phase** — it auto-advances
   (no-op) for now; `vigia report` (and `POST /scans/{id}/report`) work standalone
   against any completed scan.
-- **`eval/` benchmarking harness** (Phase 8) and the polished README/docs pass
-  (Phase 9) haven't started.
+- **The polished README/docs pass** (Phase 9) hasn't started.

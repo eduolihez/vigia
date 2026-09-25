@@ -4,12 +4,13 @@
 
 *[Versión en español](README.es.md)*
 
-**Status: Phase 7 of 9 done** (Base, Passive tools, Agent, Risk & Report, GUI core,
-GUI advanced, Active mode). Usable end to end for both passive and (once domain
-ownership is verified) active scans, from either the CLI or the bilingual (ES/EN)
-web dashboard — including the report viewer, asset graph, audit log, and a Settings
-page for model/budget/API-key overrides. See [CLAUDE.md](CLAUDE.md) for exact phase
-status and commands.
+**Status: Phase 8 of 9 done** (Base, Passive tools, Agent, Risk & Report, GUI core,
+GUI advanced, Active mode, Evaluation). Usable end to end for both passive and (once
+domain ownership is verified) active scans, from either the CLI or the bilingual
+(ES/EN) web dashboard — including the report viewer, asset graph, audit log, and a
+Settings page for model/budget/API-key overrides. A benchmark lab (`eval/`) measures
+the agent's real OSINT quality against synthetic ground-truth scenarios. See
+[CLAUDE.md](CLAUDE.md) for exact phase status and commands.
 
 ## What is Vigía?
 

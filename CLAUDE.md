@@ -113,6 +113,19 @@ fails closed for — active *tools* themselves are tested only against local
 mocks/servers, never a real domain (brief rule 6). 160 backend tests green (up from
 139), 13 Playwright smoke tests green.
 
+**Phase 8 (Evaluation) — done.** Benchmark lab (`api/vigia/eval/`, data/results
+under `eval/`): 5 synthetic scenarios with known ground truth (`eval/ground_truth/`,
+kept in sync with `scenarios.py` by a dedicated test), run against a **real** planner
+LLM + real orchestrator/risk/report-writer code, with every OSINT tool call scripted
+so nothing ever touches a real domain (ADR-034). `vigia eval run` (needs Ollama, not
+run in CI — see `eval/README.md`) scores precision/recall/F1 over `Finding.type` per
+scenario plus a live Report Writer hallucination check. Running it for real against
+`qwen2.5:14b-instruct` immediately surfaced a genuine bug: the orchestrator's
+no-new-assets early-stop was aborting the *entire* scan (not just the stalled phase),
+silently skipping unrelated later phases — fixed (ADR-035) and covered by a
+dedicated orchestrator test, since a scripted-planner test would never have hit it.
+170 backend tests green (up from 160).
+
 ## Commands
 
 ### Backend (`api/`)
@@ -137,6 +150,9 @@ uv run vigia scan <domain> --agent --active --token <token>  # active scan; need
                                      #  --agent and a token from `vigia verify` first
 uv run vigia score <scan_id>        # (re)score findings with the Risk Engine (Phase 4)
 uv run vigia report <scan_id> --format md|json|pdf --out <path>  # generate a report
+uv run vigia eval list              # list benchmark lab scenarios (Phase 8)
+uv run vigia eval run               # run the benchmark lab; needs Ollama, writes
+                                     #  a results JSON under eval/results/
 ```
 
 ### Frontend (`web/`)
@@ -201,14 +217,18 @@ vigia/
 │                   agent/ is the Phase 3 LLM orchestrator (see agent/orchestrator.py)
 │                   and Phase 7's ownership.py (TXT-record verification);
 │                   risk/ + report/ are the Phase 4 Risk Engine and Report Writer;
-│                   settings_store.py + crypto.py back the Phase 6 Settings page
+│                   settings_store.py + crypto.py back the Phase 6 Settings page;
+│                   eval/ is the Phase 8 benchmark harness (lab.py/scenarios.py/
+│                   runner.py) — its ground truth/results data lives in ../eval/
 ├── web/             Next.js frontend — app/ has the Phase 5 routes (dashboard,
 │                   scans/new, scans/[id]/live, scans/[id]/findings) plus the
 │                   Phase 6 routes (scans/[id]/report, scans/[id]/graph,
 │                   scans/[id]/audit, settings); lib/api.ts is the API client;
 │                   i18n/ + messages/ are the next-intl setup (ADR-028);
 │                   tests/e2e/ is the Playwright suite
-├── eval/            Benchmark lab, ground truth, results (Phase 8)
+├── eval/            Benchmark lab data (Phase 8): ground_truth/*.json (kept in
+│                   sync with api/vigia/eval/scenarios.py by a test), results/
+│                   (gitignored — local `vigia eval run` output), README.md
 ├── docs/            architecture.md, ethics.md, decisions.md (ADRs)
 ├── docker-compose.yml / docker-compose.gpu.yml
 └── .env.example

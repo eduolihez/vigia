@@ -116,6 +116,13 @@ class AgentOrchestrator:
         self._start = time.monotonic()
         self._cves_seen: set[str] = set()
 
+    @property
+    def step_count(self) -> int:
+        """Planner-driven steps taken so far — exposed for callers that report on a
+        finished run (the eval harness, `eval/runner.py`) without reaching into
+        `_state` directly."""
+        return self._state.step_count
+
     async def run(self) -> AsyncGenerator[AgentEvent]:
         s = self._state
         domain_asset = await self._upsert_asset("domain", self.scan.domain)
@@ -188,15 +195,23 @@ class AgentOrchestrator:
                 s.phase in ASSET_DISCOVERY_PHASES
                 and s.consecutive_no_new_assets >= MAX_NO_NEW_ASSETS_BEFORE_STOP
             ):
+                # Give up on *this* phase, not the whole scan (found live via the
+                # Phase 8 benchmark lab — see eval/README.md): EXPOSURE/
+                # EMAIL_AND_SPOOFING/LEAKS/RISK are independent of subdomain
+                # discovery, so a stalled ENUMERATE shouldn't cost the rest of the
+                # scan its own unrelated checks.
                 yield _sse(
                     AgentEventType.ERROR,
                     self.scan.id,
                     message=(
-                        f"{MAX_NO_NEW_ASSETS_BEFORE_STOP} consecutive steps found no new "
-                        "assets — stopping early."
+                        f"{MAX_NO_NEW_ASSETS_BEFORE_STOP} consecutive steps in {s.phase.value} "
+                        "found no new assets — moving to the next phase instead of retrying."
                     ),
                 )
-                break
+                s.consecutive_no_new_assets = 0
+                async for ev in self._advance_phase("no new assets after repeated attempts"):
+                    yield ev
+                continue
 
         await self._finish()
         yield _sse(

@@ -362,6 +362,70 @@ async def test_budget_exceeded_stops_the_scan(monkeypatch: pytest.MonkeyPatch) -
     assert any(e.type.value == "done" for e in events)
 
 
+async def test_stalled_enumeration_skips_only_that_phase_not_the_whole_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Found live via the Phase 8 benchmark lab (eval/README.md): 2 consecutive
+    empty-handed tool calls in ENUMERATE used to abort the entire scan, silently
+    skipping EXPOSURE/EMAIL_AND_SPOOFING/LEAKS/RISK even though those checks have
+    nothing to do with subdomain discovery. It should give up on ENUMERATE only."""
+    scan = await _make_scan()
+    monkeypatch.setitem(tool_router.INVOKERS, "whois_asn", _fake_whois_asn)
+
+    email_auth_called = False
+
+    async def fake_ct(args: dict[str, Any], ctx: object) -> ToolResult:
+        return _ok_result("ct_subdomains")  # no assets, every time
+
+    async def fake_email_auth(args: dict[str, Any], ctx: object) -> ToolResult:
+        nonlocal email_auth_called
+        email_auth_called = True
+        return _ok_result(
+            "email_auth",
+            findings=[
+                FindingCandidate(
+                    type="dmarc_missing", title="No DMARC", detail="...", asset_value="example.com"
+                )
+            ],
+        )
+
+    monkeypatch.setitem(tool_router.INVOKERS, "ct_subdomains", fake_ct)
+    monkeypatch.setitem(tool_router.INVOKERS, "email_auth", fake_email_auth)
+
+    script = [
+        PlannerToolCall(tool="ct_subdomains", args={"domain": "example.com"}, reason="try 1"),
+        PlannerToolCall(tool="ct_subdomains", args={"domain": "example.com"}, reason="try 2"),
+        # ENUMERATE gets force-advanced here — RESOLVE/EXPOSURE are empty of
+        # scripted tools below, so they auto-advance without consuming a turn.
+        PlannerToolCall(tool="advance_phase", reason="nothing to resolve"),
+        PlannerToolCall(tool="advance_phase", reason="nothing in exposure"),
+        PlannerToolCall(
+            tool="email_auth", args={"domain": "example.com"}, reason="check email auth"
+        ),
+        PlannerToolCall(tool="advance_phase", reason="done with email"),
+        PlannerToolCall(tool="advance_phase", reason="nothing in leaks"),
+        PlannerToolCall(tool="advance_phase", reason="nothing to enrich"),
+    ]
+
+    async with _session_factory() as session:
+        fetched_scan = await session.get(Scan, scan.id)
+        assert fetched_scan is not None
+        scan = fetched_scan
+        async with httpx.AsyncClient() as client:
+            orch = AgentOrchestrator(session, scan, _settings(), client, FakePlanner(script))
+            events = [e async for e in orch.run()]
+
+    assert email_auth_called is True
+    assert scan.status == ScanStatus.COMPLETED
+    assert any(
+        e.type.value == "error" and "moving to the next phase" in e.data.get("message", "")
+        for e in events
+    )
+    assert any(
+        e.type.value == "finding_added" and e.data.get("type") == "dmarc_missing" for e in events
+    )
+
+
 async def _make_active_scan(*, verification_token: str = "vigia-verify=test-token") -> Scan:
     async with _session_factory() as session:
         scan = Scan(

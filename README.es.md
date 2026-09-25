@@ -4,12 +4,14 @@
 
 *[English version](README.md)*
 
-**Estado: Fase 7 de 9 completada** (Base, Tools pasivas, Agente, Riesgo e Informe,
-GUI núcleo, GUI avanzada, Modo activo). Usable de punta a punta tanto para escaneos
-pasivos como (una vez verificada la propiedad del dominio) activos, tanto por CLI
-como desde el panel web bilingüe (ES/EN) — incluye el visor de informes, el grafo de
-activos, el registro de auditoría y una página de Ajustes para modelo, presupuestos
-y claves de API. Consulta [CLAUDE.md](CLAUDE.md) para el estado exacto y los
+**Estado: Fase 8 de 9 completada** (Base, Tools pasivas, Agente, Riesgo e Informe,
+GUI núcleo, GUI avanzada, Modo activo, Evaluación). Usable de punta a punta tanto
+para escaneos pasivos como (una vez verificada la propiedad del dominio) activos,
+tanto por CLI como desde el panel web bilingüe (ES/EN) — incluye el visor de
+informes, el grafo de activos, el registro de auditoría y una página de Ajustes
+para modelo, presupuestos y claves de API. Un laboratorio de benchmarking
+(`eval/`) mide la calidad OSINT real del agente frente a escenarios sintéticos con
+verdad de referencia. Consulta [CLAUDE.md](CLAUDE.md) para el estado exacto y los
 comandos disponibles.
 
 ## ¿Qué es Vigía?

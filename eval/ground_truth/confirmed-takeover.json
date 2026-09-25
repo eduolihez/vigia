@@ -1,0 +1,11 @@
+{
+  "name": "confirmed-takeover",
+  "description": "Active mode: a dangling-DNS candidate actively confirmed as takeoverable via http_probe, once domain ownership is verified.",
+  "domain": "takeover.lab",
+  "mode": "active",
+  "expected_finding_types": [
+    "dangling_dns_candidate",
+    "dangling_dns_confirmed",
+    "network_info"
+  ]
+}

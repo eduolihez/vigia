@@ -1,0 +1,11 @@
+{
+  "name": "email-misconfig",
+  "description": "A domain missing SPF and DMARC records.",
+  "domain": "email-misconfig.lab",
+  "mode": "passive",
+  "expected_finding_types": [
+    "dmarc_missing",
+    "network_info",
+    "spf_missing"
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "kev-exposure",
+  "description": "A host exposing a service with a known-exploited (KEV) CVE.",
+  "domain": "kev-exposure.lab",
+  "mode": "passive",
+  "expected_finding_types": [
+    "known_vulnerability",
+    "network_info"
+  ]
+}

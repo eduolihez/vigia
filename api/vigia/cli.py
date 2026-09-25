@@ -240,5 +240,70 @@ async def _run_report(scan_id: str, fmt: str, out: Path | None, model_override: 
         typer.echo(content)
 
 
+eval_app = typer.Typer(
+    help="Benchmark lab (Phase 8): run the agent against synthetic scenarios with "
+    "known ground truth — see eval/README.md."
+)
+app.add_typer(eval_app, name="eval")
+
+
+@eval_app.command("run")
+def eval_run(
+    model: str | None = typer.Option(
+        None, "--model", help="Override the planner model for every scenario."
+    ),
+    scenario: str | None = typer.Option(
+        None, "--scenario", help="Run only the scenario with this name."
+    ),
+) -> None:
+    """Run the benchmark lab and write a results JSON under eval/results/.
+
+    Needs a running Ollama instance — every tool call is scripted (never a real
+    network request, per brief rule 6), but the planner and report-writer LLM calls
+    are real. Not run in CI, same as `vigia scan --agent`."""
+    asyncio.run(_run_eval(model, scenario))
+
+
+@eval_app.command("list")
+def eval_list() -> None:
+    """List the available lab scenarios."""
+    from vigia.eval.scenarios import all_scenarios
+
+    for s in all_scenarios():
+        typer.echo(f"{s.name:<20} [{s.mode.value:<7}] {s.description}")
+
+
+async def _run_eval(model_override: str | None, scenario_name: str | None) -> None:
+    from vigia.config import get_settings
+    from vigia.eval.runner import run_all, write_report
+    from vigia.eval.scenarios import all_scenarios
+
+    scenarios = all_scenarios()
+    if scenario_name:
+        scenarios = [s for s in scenarios if s.name == scenario_name]
+        if not scenarios:
+            typer.echo(f"No scenario named {scenario_name!r} (see `vigia eval list`).", err=True)
+            raise typer.Exit(code=1)
+
+    settings = get_settings()
+    report = await run_all(scenarios, settings, model_override)
+    path = write_report(report)
+
+    typer.echo(f"\nPlanner model: {report.planner_model}", err=True)
+    for r in report.scenarios:
+        typer.echo(
+            f"  {r.scenario:<20} P={r.metrics.precision:.2f} R={r.metrics.recall:.2f} "
+            f"F1={r.metrics.f1:.2f}  steps={r.step_count:<3} {r.duration_seconds:5.1f}s  "
+            f"report_dropped={r.report_dropped_items}",
+            err=True,
+        )
+    typer.echo(
+        f"\nMean: P={report.mean_precision:.2f} R={report.mean_recall:.2f} "
+        f"F1={report.mean_f1:.2f}  total report_dropped={report.total_report_dropped_items}",
+        err=True,
+    )
+    typer.echo(f"\nWrote {path}", err=True)
+
+
 if __name__ == "__main__":
     app()

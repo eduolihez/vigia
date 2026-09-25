@@ -1,0 +1,10 @@
+{
+  "name": "dangling-dns",
+  "description": "A stale subdomain with a CNAME matching a takeover fingerprint.",
+  "domain": "dangling.lab",
+  "mode": "passive",
+  "expected_finding_types": [
+    "dangling_dns_candidate",
+    "network_info"
+  ]
+}

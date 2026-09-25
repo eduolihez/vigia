@@ -1,0 +1,9 @@
+{
+  "name": "clean",
+  "description": "A well-configured domain \u2014 no subdomains, valid email auth, no exposure.",
+  "domain": "clean-corp.lab",
+  "mode": "passive",
+  "expected_finding_types": [
+    "network_info"
+  ]
+}

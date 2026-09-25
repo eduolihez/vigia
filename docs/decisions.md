@@ -3,6 +3,52 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
+## ADR-035: a stalled ENUMERATE phase skips itself, not the rest of the scan
+
+- **Context:** found live by the Phase 8 benchmark lab, not by inspection: running
+  the real agent (`qwen2.5:14b-instruct`) against the `email-misconfig` scenario, the
+  early-stop heuristic (`MAX_NO_NEW_ASSETS_BEFORE_STOP` — 2 consecutive tool calls in
+  an asset-discovery phase finding nothing new) `break`s the orchestrator's entire
+  main loop. `email-misconfig.lab` legitimately has no subdomains, so `ct_subdomains`
+  correctly found nothing twice — but that aborted the *whole scan*, silently
+  skipping EXPOSURE, EMAIL_AND_SPOOFING, LEAKS, and RISK, even though none of those
+  phases depend on subdomain discovery. Recall on that scenario was 0.33 (should have
+  been 1.0) purely because of this, not because the agent failed to find the SPF/DMARC
+  issue — it never even tried, since EMAIL_AND_SPOOFING never ran.
+- **Decision:** the early-stop now gives up on the *current* phase only — reset the
+  counter and call `_advance_phase()` instead of `break`ing — so later, unrelated
+  phases still run. Verified with a dedicated orchestrator test
+  (`test_stalled_enumeration_skips_only_that_phase_not_the_whole_scan`) and against
+  the pre-fix live benchmark data that surfaced the bug in the first place
+  (`eval/results/`); a second live confirmation run was started but killed by the
+  host's own low-memory protection mid-run (not restarted per its own instruction —
+  the offline test plus the pre-fix live data were judged sufficient evidence for
+  this specific, narrow fix).
+- **Consequence:** this is the clearest demonstration yet that the benchmark lab
+  (Phase 8) earns its keep — a real behavioral bug that unit/integration tests with
+  a scripted planner would never have exercised, since a scripted planner never
+  "gets stuck" the way a real model can.
+
+## ADR-034: benchmark lab scripts every tool call — no real domain is ever touched
+
+- **Context:** Phase 8 needs "ground truth" scenarios to measure the agent's actual
+  OSINT quality (brief section 9) — but running the real agent against a real domain
+  would violate rule 6 (no active/passive scans against real infrastructure during
+  development), and running it against a synthetic domain with *unmocked* tools would
+  still make real network calls to crt.sh/web.archive.org/Shodan/etc. for a
+  nonexistent domain, which is slow, flaky, and non-deterministic besides.
+- **Decision:** `vigia/eval/lab.py`/`scenarios.py` script every tool at the same
+  seam `tests/integration/test_orchestrator.py` already uses —
+  `tool_router.INVOKERS` — so the *planner* and *orchestrator* are real (a genuine
+  benchmark of agent quality) while every tool response is synthetic, fixed data.
+  `Finding.type` sets, not exact content, are what's scored (`score()` in `lab.py`)
+  against `eval/ground_truth/*.json`, since the agent's exact tool-call sequence
+  isn't prescribed, only what it should end up finding.
+- **Consequence:** the harness needs a real Ollama instance for real numbers (like
+  `vigia scan --agent`) but never touches the network for OSINT data — CI runs
+  `tests/integration/test_eval_runner.py` (a scripted planner, offline) to verify the
+  harness's own mechanics, not the benchmark itself.
+
 ## ADR-033: active tools are an additive allowlist, gated by a runtime bool, not baked into `PHASE_TOOLS`
 
 - **Context:** Phase 7 adds `http_probe`/`tls_check`/`screenshot` (real network

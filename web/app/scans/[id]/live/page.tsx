@@ -1,7 +1,9 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useParams, useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import { ScanSubNav } from "@/components/ScanSubNav";
 import { StatusBadge } from "@/components/StatusBadge";
 import { getScan, scanStreamUrl, stopScan, type ScanStatus } from "@/lib/api";
 
@@ -27,6 +29,7 @@ interface TimelineEvent {
 }
 
 export default function LiveScanPage() {
+  const t = useTranslations("Live");
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const scanId = params.id;
@@ -124,9 +127,11 @@ export default function LiveScanPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {scanId && <ScanSubNav scanId={scanId} />}
+
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">Live scan</h1>
+          <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">{t("heading")}</h1>
           <p className="mt-1 text-sm text-zinc-500">{scanId}</p>
         </div>
         <div className="flex items-center gap-3">
@@ -136,7 +141,7 @@ export default function LiveScanPage() {
               onClick={handleStop}
               className="rounded border border-red-500/40 bg-red-500/10 px-3 py-1.5 text-sm font-medium text-red-400 hover:bg-red-500/20"
             >
-              Stop
+              {t("stop")}
             </button>
           )}
           {status === "completed" && (
@@ -144,7 +149,7 @@ export default function LiveScanPage() {
               onClick={() => router.push(`/scans/${scanId}/findings`)}
               className="rounded bg-emerald-500 px-3 py-1.5 text-sm font-semibold text-zinc-950 hover:bg-emerald-400"
             >
-              View findings
+              {t("viewFindings")}
             </button>
           )}
         </div>
@@ -178,16 +183,13 @@ export default function LiveScanPage() {
 
       <div className="max-h-[32rem] overflow-y-auto rounded-lg border border-zinc-800 bg-zinc-950/50 p-4 font-mono text-xs">
         {events.length === 0 && !checkedInitialStatus && (
-          <p className="text-zinc-600">Checking scan status…</p>
+          <p className="text-zinc-600">{t("checking")}</p>
         )}
         {events.length === 0 && checkedInitialStatus && TERMINAL_STATUSES.includes(status) && (
-          <p className="text-zinc-600">
-            This scan already finished — no live events to replay. See the findings page for
-            results.
-          </p>
+          <p className="text-zinc-600">{t("finished")}</p>
         )}
         {events.length === 0 && checkedInitialStatus && !TERMINAL_STATUSES.includes(status) && (
-          <p className="text-zinc-600">Waiting for the agent to start…</p>
+          <p className="text-zinc-600">{t("waiting")}</p>
         )}
         {events.map((ev) => (
           <TimelineRow key={ev.key} event={ev} />

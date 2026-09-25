@@ -280,3 +280,152 @@ async def test_stop_scan_marks_it_stopped() -> None:
         stopped = await session.get(Scan, scan_id)
         assert stopped is not None
         assert stopped.status == ScanStatus.STOPPED
+
+
+async def test_list_assets_for_scan() -> None:
+    from vigia.db.models import Asset, AssetType
+
+    async with _session_factory() as session:
+        scan = Scan(
+            domain="graph-me.example",
+            mode=ScanMode.PASSIVE,
+            planner_model="fake",
+            extractor_model="fake",
+            status=ScanStatus.COMPLETED,
+        )
+        session.add(scan)
+        await session.flush()
+        root = Asset(scan_id=scan.id, type=AssetType.DOMAIN, value="graph-me.example")
+        session.add(root)
+        await session.flush()
+        session.add(
+            Asset(
+                scan_id=scan.id,
+                type=AssetType.SUBDOMAIN,
+                value="www.graph-me.example",
+                parent_id=root.id,
+            )
+        )
+        await session.commit()
+        scan_id = scan.id
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.get(f"/scans/{scan_id}/assets")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert len(body) == 2
+    values = {a["value"] for a in body}
+    assert values == {"graph-me.example", "www.graph-me.example"}
+
+
+_SCRIPTED_DRAFT = {
+    "executive_summary": "report-me.example has one finding.",
+    "top_risks": [{"title": "No DMARC", "reason": "spoofing is possible"}],
+    "findings": [
+        {
+            "title": "No DMARC record",
+            "explanation": "report-me.example has no DMARC record.",
+            "impact": "Email spoofing is possible.",
+            "remediation": "Publish a DMARC record.",
+        }
+    ],
+    "positive_observations": ["No other issues found."],
+}
+
+
+class _FakeStructuredGenerator:
+    def __init__(self, host: str, model: str) -> None:
+        del host, model
+
+    async def generate(
+        self, *, system_prompt: str, user_message: str, json_schema: dict[str, object]
+    ) -> str:
+        del system_prompt, user_message, json_schema
+        import json
+
+        return json.dumps(_SCRIPTED_DRAFT)
+
+
+async def _make_report_ready_scan() -> str:
+    from vigia.db.models import FindingSeverity
+
+    async with _session_factory() as session:
+        scan = Scan(
+            domain="report-me.example",
+            mode=ScanMode.PASSIVE,
+            planner_model="fake",
+            extractor_model="fake",
+            status=ScanStatus.COMPLETED,
+        )
+        session.add(scan)
+        await session.flush()
+        session.add(
+            Finding(
+                scan_id=scan.id,
+                type="dmarc_missing",
+                severity=FindingSeverity.HIGH,
+                score=6.5,
+                title="No DMARC record",
+                explanation="report-me.example has no DMARC record.",
+                remediation="Publish a DMARC record.",
+            )
+        )
+        await session.commit()
+        return scan.id
+
+
+async def test_generate_scan_report(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "vigia.agent.llm_client.OllamaStructuredGenerator", _FakeStructuredGenerator
+    )
+    scan_id = await _make_report_ready_scan()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(f"/scans/{scan_id}/report", json={})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["executive_summary"] == _SCRIPTED_DRAFT["executive_summary"]
+    assert len(body["findings"]) == 1
+    assert body["dropped_items"] == []
+
+
+async def test_generate_scan_report_404_for_unknown_scan(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "vigia.agent.llm_client.OllamaStructuredGenerator", _FakeStructuredGenerator
+    )
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/scans/does-not-exist/report", json={})
+    assert response.status_code == 404
+
+
+async def test_export_scan_report_markdown(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "vigia.agent.llm_client.OllamaStructuredGenerator", _FakeStructuredGenerator
+    )
+    scan_id = await _make_report_ready_scan()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(f"/scans/{scan_id}/report/export?format=md", json={})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/markdown")
+    assert "No DMARC record" in response.text
+
+
+async def test_export_scan_report_rejects_unknown_format(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        "vigia.agent.llm_client.OllamaStructuredGenerator", _FakeStructuredGenerator
+    )
+    scan_id = await _make_report_ready_scan()
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(f"/scans/{scan_id}/report/export?format=xml", json={})
+
+    assert response.status_code == 400

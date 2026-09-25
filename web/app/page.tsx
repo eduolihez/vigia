@@ -1,5 +1,6 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { SeverityBadge } from "@/components/SeverityBadge";
@@ -7,6 +8,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { listScans, type ScanSummary } from "@/lib/api";
 
 export default function Dashboard() {
+  const t = useTranslations("Dashboard");
   const [scans, setScans] = useState<ScanSummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -21,33 +23,33 @@ export default function Dashboard() {
   return (
     <div className="flex flex-col gap-8">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">Dashboard</h1>
-        <p className="mt-1 text-sm text-zinc-400">Recent scans and their current risk posture.</p>
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">{t("heading")}</h1>
+        <p className="mt-1 text-sm text-zinc-400">{t("subtitle")}</p>
       </div>
 
       {error && (
         <div className="rounded border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400">
-          Could not reach the API: {error}
+          {t("apiError", { error })}
         </div>
       )}
 
       <section className="rounded-lg border border-zinc-800 bg-zinc-950/50">
         <div className="flex items-center justify-between border-b border-zinc-800 px-4 py-3">
-          <h2 className="text-sm font-medium text-zinc-300">Recent scans</h2>
+          <h2 className="text-sm font-medium text-zinc-300">{t("recentScans")}</h2>
           <Link
             href="/scans/new"
             className="rounded bg-emerald-500/10 px-3 py-1 text-sm font-medium text-emerald-400 hover:bg-emerald-500/20"
           >
-            New scan
+            {t("newScan")}
           </Link>
         </div>
         {scans === null && !error ? (
-          <p className="px-4 py-6 text-sm text-zinc-500">Loading…</p>
+          <p className="px-4 py-6 text-sm text-zinc-500">{t("loading")}</p>
         ) : scans && scans.length === 0 ? (
           <p className="px-4 py-6 text-sm text-zinc-500">
-            No scans yet.{" "}
+            {t("noScans")}{" "}
             <Link href="/scans/new" className="text-emerald-400 hover:underline">
-              Start one
+              {t("startOne")}
             </Link>
             .
           </p>
@@ -55,11 +57,11 @@ export default function Dashboard() {
           <table className="w-full text-left text-sm">
             <thead>
               <tr className="border-b border-zinc-800 text-xs text-zinc-500">
-                <th className="px-4 py-2 font-medium">Domain</th>
-                <th className="px-4 py-2 font-medium">Status</th>
-                <th className="px-4 py-2 font-medium">Top severity</th>
-                <th className="px-4 py-2 font-medium">Findings</th>
-                <th className="px-4 py-2 font-medium">Started</th>
+                <th className="px-4 py-2 font-medium">{t("domain")}</th>
+                <th className="px-4 py-2 font-medium">{t("status")}</th>
+                <th className="px-4 py-2 font-medium">{t("topSeverity")}</th>
+                <th className="px-4 py-2 font-medium">{t("findings")}</th>
+                <th className="px-4 py-2 font-medium">{t("started")}</th>
                 <th className="px-4 py-2 font-medium"></th>
               </tr>
             </thead>
@@ -87,8 +89,8 @@ export default function Dashboard() {
                       className="text-emerald-400 hover:underline"
                     >
                       {scan.status === "running" || scan.status === "pending"
-                        ? "Follow live"
-                        : "View findings"}
+                        ? t("followLive")
+                        : t("viewFindings")}
                     </Link>
                   </td>
                 </tr>
@@ -100,10 +102,10 @@ export default function Dashboard() {
 
       <section className="rounded-lg border border-zinc-800 bg-zinc-950/50">
         <div className="border-b border-zinc-800 px-4 py-3">
-          <h2 className="text-sm font-medium text-zinc-300">Top risk domains</h2>
+          <h2 className="text-sm font-medium text-zinc-300">{t("topRiskDomains")}</h2>
         </div>
         {topFindings.length === 0 ? (
-          <p className="px-4 py-6 text-sm text-zinc-500">No findings yet.</p>
+          <p className="px-4 py-6 text-sm text-zinc-500">{t("noFindingsYet")}</p>
         ) : (
           <ul className="divide-y divide-zinc-900">
             {topFindings.map((scan) => (
@@ -112,7 +114,9 @@ export default function Dashboard() {
                   {scan.domain}
                 </Link>
                 <div className="flex items-center gap-3">
-                  <span className="text-zinc-500">{scan.findings_count} findings</span>
+                  <span className="text-zinc-500">
+                    {scan.findings_count} {t("findings").toLowerCase()}
+                  </span>
                   <SeverityBadge severity={scan.max_severity} />
                 </div>
               </li>

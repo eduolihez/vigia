@@ -1,0 +1,114 @@
+{
+  "Nav": {
+    "brand": "Vigía",
+    "dashboard": "Dashboard",
+    "newScan": "New scan",
+    "settings": "Settings"
+  },
+  "Dashboard": {
+    "heading": "Dashboard",
+    "subtitle": "Recent scans and their current risk posture.",
+    "apiError": "Could not reach the API: {error}",
+    "recentScans": "Recent scans",
+    "newScan": "New scan",
+    "loading": "Loading…",
+    "topRiskDomains": "Top-risk domains",
+    "noScans": "No scans yet.",
+    "startOne": "Start one",
+    "domain": "Domain",
+    "status": "Status",
+    "topSeverity": "Top severity",
+    "findings": "Findings",
+    "maxSeverity": "Max severity",
+    "started": "Started",
+    "followLive": "Follow live",
+    "viewFindings": "View findings",
+    "noFindingsYet": "No findings yet."
+  },
+  "NewScan": {
+    "heading": "New scan",
+    "subtitle": "Passive mode only for now — active scanning needs domain-ownership verification, which lands in a later phase.",
+    "domainLabel": "Target domain",
+    "domainPlaceholder": "example.com",
+    "modelLabel": "Planner model override (optional)",
+    "modelPlaceholder": "leave blank to use the configured/available default",
+    "submit": "Start passive scan",
+    "submitting": "Starting…",
+    "ethicsHeading": "Ethical use notice",
+    "ethicsAccept": "I own or am authorized to test this domain — accept"
+  },
+  "Live": {
+    "heading": "Live scan",
+    "phase": "Phase",
+    "status": "Status",
+    "stop": "Stop scan",
+    "viewFindings": "View findings",
+    "viewReport": "View report",
+    "viewGraph": "View graph",
+    "viewAudit": "View audit log",
+    "waiting": "Waiting for the scan to start…",
+    "checking": "Checking scan status…",
+    "finished": "This scan has already finished — showing its final state."
+  },
+  "Findings": {
+    "heading": "Findings",
+    "allSeverities": "All severities",
+    "severity": "Severity",
+    "score": "Score",
+    "type": "Type",
+    "title": "Title",
+    "cve": "CVE",
+    "kev": "KEV",
+    "epss": "EPSS",
+    "noFindings": "No findings for this scan."
+  },
+  "Report": {
+    "heading": "Report",
+    "generate": "Generate report",
+    "generating": "Drafting with the planner LLM…",
+    "executiveSummary": "Executive summary",
+    "topRisks": "Top risks",
+    "findings": "Findings",
+    "positiveObservations": "Positive observations",
+    "droppedItems": "Dropped items (unverifiable, removed automatically)",
+    "exportMd": "Export Markdown",
+    "exportJson": "Export JSON",
+    "exportPdf": "Export PDF",
+    "none": "None recorded."
+  },
+  "Graph": {
+    "heading": "Asset graph",
+    "empty": "No assets discovered yet for this scan."
+  },
+  "Audit": {
+    "heading": "Audit log",
+    "phase": "Phase",
+    "tool": "Tool",
+    "status": "Status",
+    "duration": "Duration",
+    "reason": "Reason",
+    "time": "Time",
+    "empty": "No tool calls recorded for this scan yet."
+  },
+  "Settings": {
+    "heading": "Settings",
+    "models": "Models",
+    "plannerModel": "Planner model",
+    "extractorModel": "Extractor model",
+    "budgets": "Scan budgets",
+    "maxSteps": "Max steps",
+    "maxMinutes": "Max minutes",
+    "maxDeepDives": "Max deep dives",
+    "apiKeys": "API keys",
+    "apiKeyConfigured": "Configured",
+    "apiKeyNotConfigured": "Not configured",
+    "apiKeyPlaceholder": "Enter to set, leave blank to keep",
+    "clear": "Clear",
+    "save": "Save settings",
+    "saving": "Saving…",
+    "saved": "Settings saved."
+  },
+  "Common": {
+    "language": "Language"
+  }
+}

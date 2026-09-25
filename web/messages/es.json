@@ -1,0 +1,114 @@
+{
+  "Nav": {
+    "brand": "Vigía",
+    "dashboard": "Panel",
+    "newScan": "Nuevo escaneo",
+    "settings": "Ajustes"
+  },
+  "Dashboard": {
+    "heading": "Panel",
+    "subtitle": "Escaneos recientes y su nivel de riesgo actual.",
+    "apiError": "No se pudo conectar con la API: {error}",
+    "recentScans": "Escaneos recientes",
+    "newScan": "Nuevo escaneo",
+    "loading": "Cargando…",
+    "topRiskDomains": "Dominios de mayor riesgo",
+    "noScans": "Todavía no hay escaneos.",
+    "startOne": "Inicia uno",
+    "domain": "Dominio",
+    "status": "Estado",
+    "topSeverity": "Severidad máxima",
+    "findings": "Hallazgos",
+    "maxSeverity": "Severidad máxima",
+    "started": "Iniciado",
+    "followLive": "Seguir en vivo",
+    "viewFindings": "Ver hallazgos",
+    "noFindingsYet": "Todavía no hay hallazgos."
+  },
+  "NewScan": {
+    "heading": "Nuevo escaneo",
+    "subtitle": "Solo modo pasivo por ahora — el escaneo activo necesita verificación de propiedad del dominio, que llega en una fase posterior.",
+    "domainLabel": "Dominio objetivo",
+    "domainPlaceholder": "example.com",
+    "modelLabel": "Modelo planificador (opcional)",
+    "modelPlaceholder": "deja en blanco para usar el predeterminado configurado/disponible",
+    "submit": "Iniciar escaneo pasivo",
+    "submitting": "Iniciando…",
+    "ethicsHeading": "Aviso de uso ético",
+    "ethicsAccept": "Soy propietario o tengo autorización para probar este dominio — aceptar"
+  },
+  "Live": {
+    "heading": "Escaneo en vivo",
+    "phase": "Fase",
+    "status": "Estado",
+    "stop": "Detener escaneo",
+    "viewFindings": "Ver hallazgos",
+    "viewReport": "Ver informe",
+    "viewGraph": "Ver grafo",
+    "viewAudit": "Ver registro de auditoría",
+    "waiting": "Esperando a que empiece el escaneo…",
+    "checking": "Comprobando el estado del escaneo…",
+    "finished": "Este escaneo ya ha finalizado — mostrando su estado final."
+  },
+  "Findings": {
+    "heading": "Hallazgos",
+    "allSeverities": "Todas las severidades",
+    "severity": "Severidad",
+    "score": "Puntuación",
+    "type": "Tipo",
+    "title": "Título",
+    "cve": "CVE",
+    "kev": "KEV",
+    "epss": "EPSS",
+    "noFindings": "No hay hallazgos para este escaneo."
+  },
+  "Report": {
+    "heading": "Informe",
+    "generate": "Generar informe",
+    "generating": "Redactando con el LLM planificador…",
+    "executiveSummary": "Resumen ejecutivo",
+    "topRisks": "Riesgos principales",
+    "findings": "Hallazgos",
+    "positiveObservations": "Observaciones positivas",
+    "droppedItems": "Elementos descartados (no verificables, eliminados automáticamente)",
+    "exportMd": "Exportar Markdown",
+    "exportJson": "Exportar JSON",
+    "exportPdf": "Exportar PDF",
+    "none": "Ninguno registrado."
+  },
+  "Graph": {
+    "heading": "Grafo de activos",
+    "empty": "Aún no se han descubierto activos para este escaneo."
+  },
+  "Audit": {
+    "heading": "Registro de auditoría",
+    "phase": "Fase",
+    "tool": "Herramienta",
+    "status": "Estado",
+    "duration": "Duración",
+    "reason": "Motivo",
+    "time": "Hora",
+    "empty": "Todavía no hay llamadas a herramientas registradas para este escaneo."
+  },
+  "Settings": {
+    "heading": "Ajustes",
+    "models": "Modelos",
+    "plannerModel": "Modelo planificador",
+    "extractorModel": "Modelo extractor",
+    "budgets": "Presupuestos de escaneo",
+    "maxSteps": "Pasos máximos",
+    "maxMinutes": "Minutos máximos",
+    "maxDeepDives": "Profundizaciones máximas",
+    "apiKeys": "Claves de API",
+    "apiKeyConfigured": "Configurada",
+    "apiKeyNotConfigured": "No configurada",
+    "apiKeyPlaceholder": "Escribe para establecer, deja en blanco para mantener",
+    "clear": "Borrar",
+    "save": "Guardar ajustes",
+    "saving": "Guardando…",
+    "saved": "Ajustes guardados."
+  },
+  "Common": {
+    "language": "Idioma"
+  }
+}

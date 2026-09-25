@@ -75,7 +75,19 @@ committing per item; fixed with WAL mode + per-item commits (ADR-018). (2) Reloa
 a live-scan page for an already-finished scan hung forever waiting for events that
 would never come; fixed by checking real status before opening the stream (ADR-020).
 
-No graph, report viewer, settings, or audit UI yet — that's Phase 6.
+**Phase 6 (GUI advanced) — done.** Report viewer (`/scans/[id]/report` — generate via
+the planner LLM, view executive summary/top risks/findings/positive observations,
+export Markdown/JSON/PDF), asset graph (`/scans/[id]/graph` — `@xyflow/react`,
+domain→subdomain→ip/service hierarchy with findings attached to their asset —
+ADR-025), audit log (`/scans/[id]/audit` — the existing `ToolCall` trail as a table),
+Settings (`/settings` — planner/extractor model + scan budget overrides, encrypted
+OSINT API keys, stored in `Setting`/`ApiKey` rather than `.env` edits — ADR-026), and
+bilingual ES/EN UI via `next-intl` without `[locale]` routing (a cookie, not the URL,
+picks the locale — ADR-028). New API surface: `GET/PUT /settings`,
+`GET /scans/{id}/assets`, `POST /scans/{id}/report`, `POST /scans/{id}/report/export`
+(reports are drafted fresh on every call, not persisted — ADR-027). Every scan-detail
+page now shares a `ScanSubNav`. 12 Playwright smoke tests green, including a
+locale-switch check.
 
 ## Commands
 
@@ -130,8 +142,9 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up
 
 ## Conventions
 
-- Code, identifiers, and comments: English. UI copy: bilingual ES/EN (Phase 6+, via
-  next-intl). Main docs in English; `README.es.md` mirrors `README.md` in Spanish.
+- Code, identifiers, and comments: English. UI copy: bilingual ES/EN via `next-intl`
+  (`web/messages/{en,es}.json` — add new keys to both). Main docs in English;
+  `README.es.md` mirrors `README.md` in Spanish.
 - Conventional Commits (`feat:`, `fix:`, `test:`, `docs:`, ...).
 - Backend: `ruff` + `mypy --strict` must be clean; tests live in `api/tests/{unit,
   integration,injection,fixtures}`.
@@ -157,10 +170,14 @@ vigia/
 │                   tools/ has 13 passive wrappers + kev_epss_enrich (Phase 2);
 │                   pipeline.py is the deterministic `vigia scan` pipeline;
 │                   agent/ is the Phase 3 LLM orchestrator (see agent/orchestrator.py);
-│                   risk/ + report/ are the Phase 4 Risk Engine and Report Writer
+│                   risk/ + report/ are the Phase 4 Risk Engine and Report Writer;
+│                   settings_store.py + crypto.py back the Phase 6 Settings page
 ├── web/             Next.js frontend — app/ has the Phase 5 routes (dashboard,
-│                   scans/new, scans/[id]/live, scans/[id]/findings);
-│                   lib/api.ts is the API client; tests/e2e/ is the Playwright suite
+│                   scans/new, scans/[id]/live, scans/[id]/findings) plus the
+│                   Phase 6 routes (scans/[id]/report, scans/[id]/graph,
+│                   scans/[id]/audit, settings); lib/api.ts is the API client;
+│                   i18n/ + messages/ are the next-intl setup (ADR-028);
+│                   tests/e2e/ is the Playwright suite
 ├── eval/            Benchmark lab, ground truth, results (Phase 8)
 ├── docs/            architecture.md, ethics.md, decisions.md (ADRs)
 ├── docker-compose.yml / docker-compose.gpu.yml

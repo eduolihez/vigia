@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { NextIntlClientProvider } from "next-intl";
+import { getLocale, getMessages } from "next-intl/server";
 import { NavBar } from "@/components/NavBar";
 import "./globals.css";
 
@@ -18,12 +20,20 @@ export const metadata: Metadata = {
   description: "External Attack Surface Management OSINT agent powered by a local LLM.",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  const locale = await getLocale();
+  const messages = await getMessages();
+
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html
+      lang={locale}
+      className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
+    >
       <body className="flex min-h-full flex-col bg-[#0a0e14] text-zinc-200">
-        <NavBar />
-        <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">{children}</main>
+        <NextIntlClientProvider locale={locale} messages={messages}>
+          <NavBar />
+          <main className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">{children}</main>
+        </NextIntlClientProvider>
       </body>
     </html>
   );

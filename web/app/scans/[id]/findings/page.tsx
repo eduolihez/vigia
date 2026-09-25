@@ -9,43 +9,15 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
+import { useTranslations } from "next-intl";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { ScanSubNav } from "@/components/ScanSubNav";
 import { SeverityBadge } from "@/components/SeverityBadge";
 import { SEVERITY_ORDER, listFindings, type FindingOut, type Severity } from "@/lib/api";
 
-const columns: ColumnDef<FindingOut>[] = [
-  {
-    accessorKey: "severity",
-    header: "Severity",
-    cell: ({ getValue }) => <SeverityBadge severity={getValue<Severity>()} />,
-    sortingFn: (a, b) =>
-      SEVERITY_ORDER.indexOf(a.original.severity) - SEVERITY_ORDER.indexOf(b.original.severity),
-  },
-  { accessorKey: "score", header: "Score" },
-  { accessorKey: "type", header: "Type" },
-  { accessorKey: "title", header: "Title" },
-  {
-    accessorKey: "cve",
-    header: "CVE",
-    cell: ({ getValue }) => getValue<string | null>() ?? "—",
-  },
-  {
-    accessorKey: "kev",
-    header: "KEV",
-    cell: ({ getValue }) => (getValue<boolean>() ? "yes" : "—"),
-  },
-  {
-    accessorKey: "epss",
-    header: "EPSS",
-    cell: ({ getValue }) => {
-      const v = getValue<number | null>();
-      return v === null ? "—" : v.toFixed(2);
-    },
-  },
-];
-
 export default function FindingsPage() {
+  const t = useTranslations("Findings");
   const params = useParams<{ id: string }>();
   const scanId = params.id;
 
@@ -75,6 +47,40 @@ export default function FindingsPage() {
     [findings, severityFilter],
   );
 
+  const columns = useMemo<ColumnDef<FindingOut>[]>(
+    () => [
+      {
+        accessorKey: "severity",
+        header: t("severity"),
+        cell: ({ getValue }) => <SeverityBadge severity={getValue<Severity>()} />,
+        sortingFn: (a, b) =>
+          SEVERITY_ORDER.indexOf(a.original.severity) - SEVERITY_ORDER.indexOf(b.original.severity),
+      },
+      { accessorKey: "score", header: t("score") },
+      { accessorKey: "type", header: t("type") },
+      { accessorKey: "title", header: t("title") },
+      {
+        accessorKey: "cve",
+        header: t("cve"),
+        cell: ({ getValue }) => getValue<string | null>() ?? "—",
+      },
+      {
+        accessorKey: "kev",
+        header: t("kev"),
+        cell: ({ getValue }) => (getValue<boolean>() ? "yes" : "—"),
+      },
+      {
+        accessorKey: "epss",
+        header: t("epss"),
+        cell: ({ getValue }) => {
+          const v = getValue<number | null>();
+          return v === null ? "—" : v.toFixed(2);
+        },
+      },
+    ],
+    [t],
+  );
+
   const table = useReactTable({
     data: filtered,
     columns,
@@ -87,8 +93,10 @@ export default function FindingsPage() {
 
   return (
     <div className="flex flex-col gap-6">
+      {scanId && <ScanSubNav scanId={scanId} />}
+
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">Findings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">{t("heading")}</h1>
         <p className="mt-1 text-sm text-zinc-500">{scanId}</p>
       </div>
 
@@ -100,7 +108,7 @@ export default function FindingsPage() {
 
       <div className="flex items-center gap-2">
         <label htmlFor="severity-filter" className="text-sm text-zinc-400">
-          Severity:
+          {t("severity")}:
         </label>
         <select
           id="severity-filter"
@@ -108,20 +116,20 @@ export default function FindingsPage() {
           onChange={(e) => setSeverityFilter(e.target.value)}
           className="rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-sm text-zinc-200"
         >
-          <option value="all">All</option>
+          <option value="all">{t("allSeverities")}</option>
           {SEVERITY_ORDER.map((s) => (
             <option key={s} value={s}>
               {s}
             </option>
           ))}
         </select>
-        <span className="text-xs text-zinc-600">{filtered.length} finding(s)</span>
+        <span className="text-xs text-zinc-600">{filtered.length}</span>
       </div>
 
       {loading ? (
-        <p className="text-sm text-zinc-500">Loading…</p>
+        <p className="text-sm text-zinc-500">…</p>
       ) : filtered.length === 0 ? (
-        <p className="text-sm text-zinc-500">No findings match this filter.</p>
+        <p className="text-sm text-zinc-500">{t("noFindings")}</p>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-zinc-800">
           <table className="w-full text-left text-sm">

@@ -1,10 +1,12 @@
 "use client";
 
+import { useTranslations } from "next-intl";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { acceptEthicsNotice, createScan, getEthicsStatus } from "@/lib/api";
 
 export default function NewScanPage() {
+  const t = useTranslations("NewScan");
   const router = useRouter();
   const [domain, setDomain] = useState("");
   const [model, setModel] = useState("");
@@ -46,11 +48,8 @@ export default function NewScanPage() {
 
   return (
     <div className="mx-auto max-w-xl">
-      <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">New scan</h1>
-      <p className="mt-1 text-sm text-zinc-400">
-        Passive mode only for now — active scanning needs domain-ownership verification, which lands
-        in a later phase.
-      </p>
+      <h1 className="text-2xl font-semibold tracking-tight text-zinc-50">{t("heading")}</h1>
+      <p className="mt-1 text-sm text-zinc-400">{t("subtitle")}</p>
 
       {error && (
         <div className="mt-4 rounded border border-red-500/40 bg-red-500/10 px-4 py-3 text-sm text-red-400">
@@ -60,13 +59,13 @@ export default function NewScanPage() {
 
       {ethicsAccepted === false && (
         <div className="mt-6 rounded-lg border border-yellow-500/40 bg-yellow-500/10 p-4">
-          <h2 className="text-sm font-semibold text-yellow-400">Ethical use notice</h2>
+          <h2 className="text-sm font-semibold text-yellow-400">{t("ethicsHeading")}</h2>
           <p className="mt-2 text-sm text-zinc-300">{ethicsNotice}</p>
           <button
             onClick={handleAccept}
             className="mt-3 rounded bg-yellow-500/20 px-3 py-1.5 text-sm font-medium text-yellow-300 hover:bg-yellow-500/30"
           >
-            I own or am authorized to test this domain — accept
+            {t("ethicsAccept")}
           </button>
         </div>
       )}
@@ -74,12 +73,12 @@ export default function NewScanPage() {
       <form onSubmit={handleSubmit} className="mt-6 flex flex-col gap-4">
         <div>
           <label htmlFor="domain" className="block text-sm font-medium text-zinc-300">
-            Target domain
+            {t("domainLabel")}
           </label>
           <input
             id="domain"
             required
-            placeholder="example.com"
+            placeholder={t("domainPlaceholder")}
             value={domain}
             onChange={(e) => setDomain(e.target.value)}
             disabled={ethicsAccepted !== true}
@@ -89,11 +88,11 @@ export default function NewScanPage() {
 
         <div>
           <label htmlFor="model" className="block text-sm font-medium text-zinc-300">
-            Planner model override <span className="text-zinc-500">(optional)</span>
+            {t("modelLabel")}
           </label>
           <input
             id="model"
-            placeholder="leave blank to use the configured/available default"
+            placeholder={t("modelPlaceholder")}
             value={model}
             onChange={(e) => setModel(e.target.value)}
             disabled={ethicsAccepted !== true}
@@ -106,7 +105,7 @@ export default function NewScanPage() {
           disabled={ethicsAccepted !== true || submitting || !domain.trim()}
           className="mt-2 rounded bg-emerald-500 px-4 py-2 text-sm font-semibold text-zinc-950 hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40"
         >
-          {submitting ? "Starting…" : "Start passive scan"}
+          {submitting ? t("submitting") : t("submit")}
         </button>
       </form>
     </div>

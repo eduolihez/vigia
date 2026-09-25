@@ -68,3 +68,70 @@ test("a findings page for an unknown scan id renders without crashing", async ({
   await page.goto("/scans/does-not-exist/findings");
   await expect(page.getByRole("heading", { name: "Findings" })).toBeVisible();
 });
+
+test("an audit page for an unknown scan id renders without crashing", async ({ page }) => {
+  await page.route(`${API_ORIGIN}/scans/*/audit`, (route) =>
+    route.fulfill({ status: 404, json: { detail: "No tool calls found for this scan id" } }),
+  );
+  await page.goto("/scans/does-not-exist/audit");
+  await expect(page.getByRole("heading", { name: "Audit log" })).toBeVisible();
+  await expect(page.getByText("No tool calls recorded for this scan yet.")).toBeVisible();
+});
+
+test("a graph page for an unknown scan id renders without crashing", async ({ page }) => {
+  await page.route(`${API_ORIGIN}/scans/*/assets`, (route) => route.fulfill({ json: [] }));
+  await page.route(`${API_ORIGIN}/scans/*/findings`, (route) => route.fulfill({ json: [] }));
+  await page.goto("/scans/does-not-exist/graph");
+  await expect(page.getByRole("heading", { name: "Asset graph" })).toBeVisible();
+  await expect(page.getByText("No assets discovered yet for this scan.")).toBeVisible();
+});
+
+test("a report page shows the generate button without any API calls", async ({ page }) => {
+  await page.goto("/scans/does-not-exist/report");
+  await expect(page.getByRole("heading", { name: "Report" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Generate report" })).toBeVisible();
+});
+
+test("the scan sub-nav links to findings/report/graph/audit", async ({ page }) => {
+  await page.route(`${API_ORIGIN}/scans/*/findings`, (route) => route.fulfill({ json: [] }));
+  await page.goto("/scans/does-not-exist/findings");
+  const subNav = page.getByRole("navigation").nth(1);
+  await expect(subNav.getByRole("link", { name: "View report" })).toBeVisible();
+  await expect(subNav.getByRole("link", { name: "View graph" })).toBeVisible();
+  await expect(subNav.getByRole("link", { name: "View audit log" })).toBeVisible();
+});
+
+test("navigating to Settings shows the settings page", async ({ page }) => {
+  await mockApi(page);
+  await page.route(`${API_ORIGIN}/settings`, (route) =>
+    route.fulfill({
+      json: {
+        planner_model: "qwen3.6:35b",
+        extractor_model: "granite4.1:8b",
+        scan_max_steps: 60,
+        scan_max_minutes: 20,
+        scan_max_deep_dives: 5,
+        configured_api_keys: {
+          censys_api_id: false,
+          censys_api_secret: false,
+          github_token: true,
+          hibp_api_key: false,
+        },
+      },
+    }),
+  );
+  await page.goto("/");
+  await page.getByRole("navigation").getByRole("link", { name: "Settings" }).click();
+  await expect(page).toHaveURL(/\/settings$/);
+  await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+  await expect(page.getByLabel("Planner model")).toHaveValue("qwen3.6:35b");
+  await expect(page.getByText("Configured", { exact: true })).toBeVisible();
+});
+
+test("the locale switcher changes the dashboard to Spanish", async ({ page }) => {
+  await mockApi(page);
+  await page.goto("/");
+  await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+  await page.getByLabel("Language").selectOption("es");
+  await expect(page.getByRole("heading", { name: "Panel" })).toBeVisible();
+});

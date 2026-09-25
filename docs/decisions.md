@@ -3,7 +3,72 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
-## ADR-023: CI starts/stops the Playwright webServer itself — Playwright's own teardown hung
+## ADR-028: i18n via next-intl without `[locale]` routing — a cookie picks the locale
+
+- **Context:** Phase 6 requires bilingual ES/EN UI copy. next-intl's default setup
+  puts every route under a `[locale]` segment (`/en/...`, `/es/...`), driven by
+  middleware — but every existing route, the Phase 5 Playwright suite, and every
+  link in the codebase assume unprefixed paths (`/`, `/scans/new`, ...).
+- **Decision:** use next-intl's documented "without i18n routing" mode instead: a
+  `vigia_locale` cookie (read server-side in `i18n/request.ts` via `next/headers`)
+  picks the locale, `NextIntlClientProvider` in the root layout supplies messages,
+  and a client-side `LocaleSwitcher` writes the cookie then calls
+  `router.refresh()` to re-render the (server) root layout with the new locale. No
+  route moves; existing links, bookmarks, and Playwright locators keep working
+  unprefixed.
+- **Consequence:** locale is a per-browser preference (cookie), not a shareable URL
+  — acceptable for a self-hosted SOC console with one operator per browser, unlike
+  a public multi-locale marketing site where indexable `[locale]` URLs would matter.
+
+## ADR-027: reports stay generate-on-demand, not persisted, when exposed over the API
+
+- **Context:** the Phase 6 report viewer (`/scans/{id}/report`) needed a way to view
+  and export a scan's report from the GUI. The schema (brief section 8) has no
+  `Report` table, and the Phase 4 CLI (`vigia report <scan_id>`) already treats every
+  invocation as an independent LLM draft with no caching.
+- **Decision:** keep that model over the API: `POST /scans/{id}/report` drafts a
+  fresh report and returns it as JSON for on-page display;
+  `POST /scans/{id}/report/export?format=md|json|pdf` drafts again and returns a
+  downloadable file. No new table, no migration. The tradeoff is explicit: the
+  exported file's wording won't byte-for-byte match what's on screen (the LLM draft
+  isn't deterministic), same as running `vigia report` twice today.
+- **Consequence:** if exact viewed/exported parity or history ever become a real
+  requirement, that's a real `Report` table + migration, not a workaround here.
+
+## ADR-026: Settings page stores overrides in `Setting`/`ApiKey`, not new `.env` edits
+
+- **Context:** Phase 6 needed a GUI Settings page for model choice, scan budgets,
+  and the OSINT source API keys (Censys, GitHub, HIBP) that `config.py` already
+  reads from `.env` — but a running container can't rewrite its own `.env` file
+  sensibly, and secrets typed into a browser shouldn't land in plaintext anywhere.
+- **Decision:** `vigia/settings_store.py` layers runtime overrides on top of the
+  `.env` defaults: model/budget overrides live in the existing `Setting` key/value
+  table (same pattern `ethics.py` already used for the acceptance flag); API keys
+  are encrypted with Fernet (`vigia/crypto.py`, key derived from `VIGIA_SECRET_KEY`
+  via SHA-256) into the `ApiKey` table that was already in the schema for exactly
+  this. `GET /settings` never echoes a stored key back, only whether one is set.
+  `build_effective_config()` returns a full `Settings` copy with overrides/decrypted
+  keys applied, so `POST /scans`, the background scan runner, and report generation
+  all pick these up automatically — `tool_router.py`/`pipeline.py` keep reading
+  plain `Settings` attributes and don't need to know overrides exist.
+- **Consequence:** an override only takes effect for scans/reports started after it
+  was saved; nothing currently running is affected retroactively (each scan already
+  freezes its own `planner_model`/`extractor_model`/budget onto its `Scan` row at
+  creation time, which this doesn't change).
+
+## ADR-025: `@xyflow/react` for the asset graph, not `reactflow`
+
+- **Context:** the Phase 6 graph view (`/scans/{id}/graph`) needed a node/edge
+  graph library. `reactflow` is the well-known package name, but its own npm
+  listing marks it superseded.
+- **Decision:** use `@xyflow/react` (12.11.6) — the actively maintained successor
+  from the same maintainers, same API shape (`ReactFlow`, `useNodesState`, etc.),
+  confirmed compatible with React 19 (peer range `>=17`) before adding it. Layout is
+  a simple manual BFS-depth-by-asset-hierarchy placement (domain → subdomain →
+  ip/service, findings one row below their asset) — no auto-layout dependency
+  (e.g. dagre) added for what's typically a few dozen nodes.
+
+## ADR-024: CI starts/stops the Playwright webServer itself — Playwright's own teardown hung
 
 - **Context:** after ADR-022's mocking fix, CI still hung on "Playwright smoke tests"
   — but the logs showed all 6 tests passing in ~2s; the job then sat idle for 5+
@@ -32,7 +97,7 @@ Short ADRs for decisions made autonomously during development, per the project b
 - **Context:** the first CI push of the Phase 5 smoke tests (ADR-019 through -021)
   hung; at the time this was believed to be caused by a real (unmocked) API call to
   a nonexistent `localhost:8000` backend never resolving on the Actions runner. That
-  diagnosis turned out to be incomplete — see ADR-023 for the actual root cause,
+  diagnosis turned out to be incomplete — see ADR-024 for the actual root cause,
   found after mocking alone did not fix the hang. The mocking change itself is still
   correct on its own merits (below) and was kept.
 - **Decision:** the tests were calling the real (deliberately unmocked)

@@ -21,7 +21,7 @@ import asyncio
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Response
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import select
@@ -30,7 +30,7 @@ from sqlmodel import col
 from vigia.agent.events import AgentEvent, AgentEventType
 from vigia.api.deps import SessionDep
 from vigia.config import get_settings
-from vigia.db.models import Finding, Scan, ScanMode, ScanStatus, ToolCall
+from vigia.db.models import Asset, Finding, Scan, ScanMode, ScanStatus, ToolCall
 from vigia.ethics import EthicsNoticeNotAccepted
 
 router = APIRouter(prefix="/scans", tags=["scans"])
@@ -108,22 +108,25 @@ async def create_scan(request: StartScanRequest, session: SessionDep) -> CreateS
     """Create a pending `Scan` row. Nothing runs until a client subscribes to
     `GET /scans/{id}/stream` — that's the actual scan trigger."""
     from vigia.ethics import ensure_accepted
+    from vigia.settings_store import build_effective_config
 
     try:
         await ensure_accepted(session)
     except EthicsNoticeNotAccepted as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    settings = get_settings()
+    config = await build_effective_config(session, get_settings())
     from vigia.agent.orchestrator import resolve_planner
 
-    planner_model = await resolve_planner(settings, request.model)
+    planner_model = await resolve_planner(config, request.model)
 
     scan = Scan(
         domain=request.domain,
         mode=ScanMode.PASSIVE,
         planner_model=planner_model,
-        extractor_model=settings.extractor_model,
+        extractor_model=config.extractor_model,
+        budget_max_steps=config.scan_max_steps,
+        budget_max_minutes=config.scan_max_minutes,
         status=ScanStatus.PENDING,
     )
     session.add(scan)
@@ -218,6 +221,152 @@ async def list_findings(scan_id: str, session: SessionDep) -> list[FindingOut]:
     ]
 
 
+class AssetOut(BaseModel):
+    id: str
+    type: str
+    value: str
+    parent_id: str | None
+    first_seen: str
+    last_seen: str
+
+
+@router.get("/{scan_id}/assets")
+async def list_assets(scan_id: str, session: SessionDep) -> list[AssetOut]:
+    """Every discovered `Asset` for one scan, parent links included — the raw
+    material the graph view (`/scans/{id}/graph`) lays out."""
+    assets = (
+        (await session.execute(select(Asset).where(col(Asset.scan_id) == scan_id)))
+        .scalars()
+        .all()
+    )
+    return [
+        AssetOut(
+            id=a.id,
+            type=a.type.value,
+            value=a.value,
+            parent_id=a.parent_id,
+            first_seen=a.first_seen.isoformat(),
+            last_seen=a.last_seen.isoformat(),
+        )
+        for a in assets
+    ]
+
+
+class ReportRequest(BaseModel):
+    model: str | None = None
+
+
+class TopRiskOut(BaseModel):
+    title: str
+    reason: str
+
+
+class ReportFindingOut(BaseModel):
+    title: str
+    explanation: str
+    impact: str
+    remediation: str
+
+
+class ReportOut(BaseModel):
+    executive_summary: str
+    top_risks: list[TopRiskOut]
+    findings: list[ReportFindingOut]
+    positive_observations: list[str]
+    dropped_items: list[str]
+    attempts_used: int
+
+
+@router.post("/{scan_id}/report")
+async def generate_scan_report(
+    scan_id: str, request: ReportRequest, session: SessionDep
+) -> ReportOut:
+    """Draft a fresh report via the planner LLM and return it as JSON for the report
+    viewer page. Not persisted — same on-demand-generation model as `vigia report`
+    (there's no `Report` table in the schema); `POST /scans/{id}/report/export`
+    drafts again for a specific downloadable format."""
+    from vigia.agent.llm_client import OllamaStructuredGenerator
+    from vigia.report.writer import generate_report
+    from vigia.settings_store import build_effective_config
+
+    scan = await session.get(Scan, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    config = await build_effective_config(session, get_settings())
+    model = request.model or config.planner_model
+    generator = OllamaStructuredGenerator(host=config.ollama_host, model=model)
+    result = await generate_report(session, scan, generator)
+
+    return ReportOut(
+        executive_summary=result.draft.executive_summary,
+        top_risks=[TopRiskOut(title=r.title, reason=r.reason) for r in result.draft.top_risks],
+        findings=[
+            ReportFindingOut(
+                title=f.title,
+                explanation=f.explanation,
+                impact=f.impact,
+                remediation=f.remediation,
+            )
+            for f in result.draft.findings
+        ],
+        positive_observations=result.draft.positive_observations,
+        dropped_items=result.dropped_items,
+        attempts_used=result.attempts_used,
+    )
+
+
+@router.post("/{scan_id}/report/export")
+async def export_scan_report(
+    scan_id: str, format: str, request: ReportRequest, session: SessionDep
+) -> Response:
+    """Draft a fresh report (see `POST /scans/{id}/report`) and return it as a
+    downloadable file in `format` (`md`, `json`, or `pdf`)."""
+    import json as _json
+
+    from vigia.agent.llm_client import OllamaStructuredGenerator
+    from vigia.report.exporters.json_export import to_json_dict
+    from vigia.report.exporters.markdown import to_markdown
+    from vigia.report.exporters.pdf import markdown_to_pdf_bytes
+    from vigia.report.writer import generate_report
+    from vigia.settings_store import build_effective_config
+
+    if format not in ("md", "json", "pdf"):
+        raise HTTPException(status_code=400, detail="format must be md, json, or pdf")
+
+    scan = await session.get(Scan, scan_id)
+    if scan is None:
+        raise HTTPException(status_code=404, detail="Scan not found")
+
+    config = await build_effective_config(session, get_settings())
+    model = request.model or config.planner_model
+    generator = OllamaStructuredGenerator(host=config.ollama_host, model=model)
+    result = await generate_report(session, scan, generator)
+
+    findings = (
+        (await session.execute(select(Finding).where(col(Finding.scan_id) == scan_id)))
+        .scalars()
+        .all()
+    )
+
+    content: bytes
+    if format == "json":
+        content = _json.dumps(to_json_dict(scan, result, list(findings)), indent=2).encode("utf-8")
+        media_type = "application/json"
+    elif format == "md":
+        content = to_markdown(scan, result, list(findings)).encode("utf-8")
+        media_type = "text/markdown"
+    else:
+        content = await markdown_to_pdf_bytes(to_markdown(scan, result, list(findings)))
+        media_type = "application/pdf"
+
+    return Response(
+        content=content,
+        media_type=media_type,
+        headers={"Content-Disposition": f'attachment; filename="vigia-report-{scan_id}.{format}"'},
+    )
+
+
 @router.get("/{scan_id}/audit")
 async def export_audit_log(scan_id: str, session: SessionDep) -> list[dict[str, object]]:
     """Export the immutable `ToolCall` audit trail for one scan as JSON."""
@@ -251,17 +400,19 @@ async def _run_scan_and_broadcast(scan_id: str) -> None:
     from vigia.agent.orchestrator import run_agent_scan_for
     from vigia.config import get_settings as _get_settings
     from vigia.db.session import session_scope
+    from vigia.settings_store import build_effective_config
 
-    settings = _get_settings()
+    defaults = _get_settings()
     try:
         async with session_scope() as session:
             scan = await session.get(Scan, scan_id)
             if scan is None:
                 return
+            config = await build_effective_config(session, defaults)
             scan.status = ScanStatus.RUNNING
             scan.started_at = datetime.now(UTC)
             await session.commit()
-            async for event in run_agent_scan_for(session, scan, settings):
+            async for event in run_agent_scan_for(session, scan, config):
                 await _broadcast(scan_id, event)
     finally:
         await _broadcast(scan_id, None)

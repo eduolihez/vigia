@@ -41,6 +41,75 @@ export interface EthicsStatus {
   notice: string;
 }
 
+export interface AssetOut {
+  id: string;
+  type: string;
+  value: string;
+  parent_id: string | null;
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface ToolCallOut {
+  id: string;
+  scan_id: string;
+  phase: string;
+  tool: string;
+  args: Record<string, unknown>;
+  reason: string;
+  status: string;
+  duration_ms: number | null;
+  result_sha256: string | null;
+  created_at: string;
+}
+
+export interface TopRiskOut {
+  title: string;
+  reason: string;
+}
+
+export interface ReportFindingOut {
+  title: string;
+  explanation: string;
+  impact: string;
+  remediation: string;
+}
+
+export interface ReportOut {
+  executive_summary: string;
+  top_risks: TopRiskOut[];
+  findings: ReportFindingOut[];
+  positive_observations: string[];
+  dropped_items: string[];
+  attempts_used: number;
+}
+
+export const API_KEY_SOURCES = [
+  "censys_api_id",
+  "censys_api_secret",
+  "github_token",
+  "hibp_api_key",
+] as const;
+export type ApiKeySource = (typeof API_KEY_SOURCES)[number];
+
+export interface SettingsOut {
+  planner_model: string;
+  extractor_model: string;
+  scan_max_steps: number;
+  scan_max_minutes: number;
+  scan_max_deep_dives: number;
+  configured_api_keys: Record<ApiKeySource, boolean>;
+}
+
+export interface SettingsUpdate {
+  planner_model?: string;
+  extractor_model?: string;
+  scan_max_steps?: number;
+  scan_max_minutes?: number;
+  scan_max_deep_dives?: number;
+  api_keys?: Partial<Record<ApiKeySource, string>>;
+}
+
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`${API_URL}${path}`, {
     ...init,
@@ -92,6 +161,46 @@ export function acceptEthicsNotice(): Promise<EthicsStatus> {
 
 export function scanStreamUrl(id: string): string {
   return `${API_URL}/scans/${id}/stream`;
+}
+
+export function listAssets(scanId: string): Promise<AssetOut[]> {
+  return apiFetch(`/scans/${scanId}/assets`);
+}
+
+export function listAudit(scanId: string): Promise<ToolCallOut[]> {
+  return apiFetch(`/scans/${scanId}/audit`);
+}
+
+export function generateReport(scanId: string, model?: string): Promise<ReportOut> {
+  return apiFetch(`/scans/${scanId}/report`, {
+    method: "POST",
+    body: JSON.stringify({ model: model || null }),
+  });
+}
+
+export async function exportReport(
+  scanId: string,
+  format: "md" | "json" | "pdf",
+  model?: string,
+): Promise<Blob> {
+  const response = await fetch(`${API_URL}/scans/${scanId}/report/export?format=${format}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: model || null }),
+  });
+  if (!response.ok) {
+    const body = await response.text().catch(() => "");
+    throw new Error(`${response.status} ${response.statusText}: ${body}`);
+  }
+  return response.blob();
+}
+
+export function getSettings(): Promise<SettingsOut> {
+  return apiFetch("/settings");
+}
+
+export function updateSettings(update: SettingsUpdate): Promise<SettingsOut> {
+  return apiFetch("/settings", { method: "PUT", body: JSON.stringify(update) });
 }
 
 export const SEVERITY_ORDER: Severity[] = ["critical", "high", "medium", "low", "info"];

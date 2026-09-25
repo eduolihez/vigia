@@ -19,6 +19,8 @@ web (Next.js)  ──SSE/REST──►  api (FastAPI)
                                 ├─ report/validator       entity/evidence check    [Phase 4]
                                 ├─ report/exporters/      Markdown, JSON, PDF      [Phase 4]
                                 ├─ ethics.py               first-run notice gate   [Phase 3]
+                                ├─ settings_store.py       runtime overrides       [Phase 6]
+                                ├─ crypto.py               API-key encryption      [Phase 6]
                                 └─ db/                    models + migrations     [Phase 1]
                               ollama (planner model; extractor unused so far)
 ```
@@ -68,14 +70,21 @@ but re-running `score` or `report` on an already-scored/reported scan is always 
   thin DB-updating wrapper (`score_scan_findings`); `report/validator.py`'s
   `EvidenceBase` is built fresh from the scan's `Asset`/`Finding` rows each time a
   report is validated, so it can never drift from what's actually in the database.
+- **Phase 5:** the GUI's own scan-creation flow (`POST /scans` then
+  `GET /scans/{id}/stream`) is create-then-subscribe rather than one-shot streaming
+  like `POST /scans/agent` — a browser `EventSource` can only `GET` (ADR-021).
+- **Phase 6:** `settings_store.py::build_effective_config()` is the seam between the
+  Settings page and everything that already reads a plain `Settings` object
+  (`tool_router.py`, `pipeline.py`, `resolve_planner`) — it returns a `Settings`
+  copy with `Setting`-table overrides and decrypted `ApiKey` values applied, so
+  none of that code needed to change (ADR-026). Reports stay generate-on-demand
+  over the API too, same as the Phase 4 CLI (ADR-027).
 
 ## Not yet built
 
 - **Report Writer isn't wired into the agent's REPORT phase** — it auto-advances
-  (no-op) for now; `vigia report` works standalone against any completed scan.
-- **No GUI** (Phases 5–6): the API surface today is intentionally minimal (`/health`,
-  `/scans/agent` SSE, `/scans/{id}/audit`) — just enough to prove the SSE/audit
-  mechanisms work over HTTP, not the full dashboard/graph/report-viewer routes.
+  (no-op) for now; `vigia report` (and `POST /scans/{id}/report`) work standalone
+  against any completed scan.
 - **No active-mode tools** (`http_probe`, `screenshot`, `tls_check` — Phase 7):
   `agent/ownership.py` (TXT-record verification) exists but nothing consumes it yet.
 - **`eval/` benchmarking harness** (Phase 8) and the polished README/docs pass

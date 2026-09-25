@@ -38,9 +38,8 @@ PHASE_ORDER: list[AgentPhase] = [
     AgentPhase.DONE,
 ]
 
-# Passive-mode tool names allowed per phase (Phase 2 tool registry). Active tools
-# (http_probe, screenshot, tls_check) are added to EXPOSURE only once Phase 7 lands
-# domain-ownership verification.
+# Passive-mode tool names allowed per phase (Phase 2 tool registry) — always
+# available, regardless of scan mode.
 PHASE_TOOLS: dict[AgentPhase, list[str]] = {
     AgentPhase.VERIFY: [],
     AgentPhase.SEED: ["whois_asn"],
@@ -53,6 +52,24 @@ PHASE_TOOLS: dict[AgentPhase, list[str]] = {
     AgentPhase.REPORT: [],
     AgentPhase.DONE: [],
 }
+
+# Additional tool names allowed per phase only for an active-mode scan that has
+# passed domain-ownership verification (Phase 7, brief section 6.1) — see
+# `AgentOrchestrator`'s VERIFY-phase handling and `tool_router.invoke`'s
+# `active_enabled` gate. http_probe/tls_check/screenshot all make real network
+# requests to the target host, unlike anything in `PHASE_TOOLS`.
+ACTIVE_PHASE_TOOLS: dict[AgentPhase, list[str]] = {
+    AgentPhase.EXPOSURE: ["http_probe", "tls_check", "screenshot"],
+}
+
+
+def tools_for_phase(phase: AgentPhase, *, active_enabled: bool = False) -> list[str]:
+    """Every tool name allowed in `phase` — the passive set, plus the active set too
+    when `active_enabled` (i.e. an active scan that's passed ownership verification)."""
+    tools = list(PHASE_TOOLS.get(phase, []))
+    if active_enabled:
+        tools += ACTIVE_PHASE_TOOLS.get(phase, [])
+    return tools
 
 
 def next_phase(phase: AgentPhase) -> AgentPhase:

@@ -360,3 +360,141 @@ async def test_budget_exceeded_stops_the_scan(monkeypatch: pytest.MonkeyPatch) -
 
     assert scan.status == ScanStatus.COMPLETED
     assert any(e.type.value == "done" for e in events)
+
+
+async def _make_active_scan(*, verification_token: str = "vigia-verify=test-token") -> Scan:
+    async with _session_factory() as session:
+        scan = Scan(
+            domain="example.com",
+            mode=ScanMode.ACTIVE,
+            verification_token=verification_token,
+            planner_model="fake-model",
+            extractor_model="fake-model",
+            status=ScanStatus.RUNNING,
+        )
+        session.add(scan)
+        await session.commit()
+        await session.refresh(scan)
+        return scan
+
+
+async def test_active_scan_fails_closed_without_a_matching_txt_record(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """VERIFY fails (no TXT record published, or wrong token) -> the scan stops
+    immediately at VERIFY, status FAILED, and no tool — not even the passive
+    whois_asn SEED lookup — ever runs."""
+    scan = await _make_active_scan()
+    ran_any_tool = False
+
+    async def fail_verify(domain: str, expected_token: str) -> bool:
+        return False
+
+    async def fake_whois_asn(args: dict[str, Any], ctx: object) -> ToolResult:
+        nonlocal ran_any_tool
+        ran_any_tool = True
+        return _ok_result("whois_asn")
+
+    monkeypatch.setattr("vigia.agent.ownership.verify_ownership", fail_verify)
+    monkeypatch.setitem(tool_router.INVOKERS, "whois_asn", fake_whois_asn)
+
+    async with _session_factory() as session:
+        fetched_scan = await session.get(Scan, scan.id)
+        assert fetched_scan is not None
+        scan = fetched_scan
+        async with httpx.AsyncClient() as client:
+            orch = AgentOrchestrator(session, scan, _settings(), client, FakePlanner([]))
+            events = [e async for e in orch.run()]
+
+    assert ran_any_tool is False
+    assert scan.status == ScanStatus.FAILED
+    assert scan.verified is False
+    assert any(e.type.value == "error" for e in events)
+    assert any(e.type.value == "done" for e in events)
+
+
+async def test_active_scan_proceeds_once_ownership_is_verified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    scan = await _make_active_scan()
+
+    async def succeed_verify(domain: str, expected_token: str) -> bool:
+        return True
+
+    monkeypatch.setattr("vigia.agent.ownership.verify_ownership", succeed_verify)
+    monkeypatch.setitem(tool_router.INVOKERS, "whois_asn", _fake_whois_asn)
+
+    script = [
+        PlannerToolCall(tool="advance_phase", reason="nothing to enumerate"),
+        PlannerToolCall(tool="advance_phase", reason="nothing to resolve"),
+        PlannerToolCall(tool="advance_phase", reason="nothing in exposure"),
+        PlannerToolCall(tool="advance_phase", reason="nothing in email"),
+        PlannerToolCall(tool="advance_phase", reason="nothing in leaks"),
+        PlannerToolCall(tool="advance_phase", reason="nothing to enrich"),
+    ]
+
+    async with _session_factory() as session:
+        fetched_scan = await session.get(Scan, scan.id)
+        assert fetched_scan is not None
+        scan = fetched_scan
+        async with httpx.AsyncClient() as client:
+            orch = AgentOrchestrator(session, scan, _settings(), client, FakePlanner(script))
+            events = [e async for e in orch.run()]
+
+    assert scan.verified is True
+    assert scan.status == ScanStatus.COMPLETED
+    phase_changes = [
+        (e.data.get("from_phase"), e.data.get("to_phase"))
+        for e in events
+        if e.type.value == "phase_changed"
+    ]
+    assert ("verify", "seed") in phase_changes
+
+
+async def test_active_tools_are_offered_only_once_verified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The EXPOSURE-phase tool schema built for the planner includes http_probe once
+    `Scan.verified` is True — this is the actual reachability path a compromised
+    planner would need, and it's gated on real verification, not on scan.mode alone."""
+    scan = await _make_active_scan()
+
+    async def succeed_verify(domain: str, expected_token: str) -> bool:
+        return True
+
+    monkeypatch.setattr("vigia.agent.ownership.verify_ownership", succeed_verify)
+    monkeypatch.setitem(tool_router.INVOKERS, "whois_asn", _fake_whois_asn)
+
+    called_with: dict[str, Any] = {}
+
+    async def fake_http_probe(args: dict[str, Any], ctx: object) -> ToolResult:
+        called_with.update(args)
+        return _ok_result("http_probe")
+
+    monkeypatch.setitem(tool_router.INVOKERS, "http_probe", fake_http_probe)
+
+    script = [
+        PlannerToolCall(tool="advance_phase", reason="nothing to enumerate"),
+        PlannerToolCall(tool="advance_phase", reason="nothing to resolve"),
+        PlannerToolCall(
+            tool="http_probe", args={"hostname": "example.com"}, reason="active check"
+        ),
+        PlannerToolCall(tool="advance_phase", reason="done with exposure"),
+        PlannerToolCall(tool="advance_phase", reason="nothing in email"),
+        PlannerToolCall(tool="advance_phase", reason="nothing in leaks"),
+        PlannerToolCall(tool="advance_phase", reason="nothing to enrich"),
+    ]
+
+    async with _session_factory() as session:
+        fetched_scan = await session.get(Scan, scan.id)
+        assert fetched_scan is not None
+        scan = fetched_scan
+        async with httpx.AsyncClient() as client:
+            orch = AgentOrchestrator(session, scan, _settings(), client, FakePlanner(script))
+            events = [e async for e in orch.run()]
+
+    assert called_with == {"hostname": "example.com"}
+    assert scan.status == ScanStatus.COMPLETED
+    assert any(
+        e.type.value == "tool_call" and e.data.get("tool") == "http_probe" for e in events
+    )

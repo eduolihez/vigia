@@ -35,7 +35,7 @@ from vigia.agent.llm_client import (
     PlannerClient,
     check_model_availability,
 )
-from vigia.agent.phases import PHASE_TOOLS, AgentPhase, next_phase
+from vigia.agent.phases import PHASE_TOOLS, AgentPhase, next_phase, tools_for_phase
 from vigia.agent.scope_guard import ScopeGuard, ScopeViolation
 from vigia.agent.tool_router import ToolContext, ToolNotAllowedError, invoke
 from vigia.agent.tool_schemas import build_tool_defs
@@ -86,6 +86,7 @@ class _AgentState:
     consecutive_invalid_calls: int = 0
     consecutive_no_new_assets: int = 0
     deterministic_fallback: bool = False
+    ownership_failed: bool = False
     deep_dive_return_phase: AgentPhase | None = None
     focus_asset_id: str | None = None
     assets_by_value: dict[str, Asset] = field(default_factory=dict)
@@ -125,9 +126,26 @@ class AgentOrchestrator:
                 break
 
             if s.phase == AgentPhase.VERIFY:
-                # Passive mode never needs ownership verification; active mode isn't
-                # implemented until Phase 7, so there's nothing to do here yet either
-                # way but advance.
+                if self.scan.mode == ScanMode.ACTIVE:
+                    if await self._verify_ownership():
+                        self.scan.verified = True
+                        await self.session.commit()
+                        async for ev in self._advance_phase("domain ownership verified"):
+                            yield ev
+                        continue
+                    yield _sse(
+                        AgentEventType.ERROR,
+                        self.scan.id,
+                        message=(
+                            f"Active-mode scan for {self.scan.domain} failed ownership "
+                            "verification: no TXT record matching the expected "
+                            "vigia-verify=<token> value was found on the root domain. "
+                            "Publish that record and start a new scan."
+                        ),
+                    )
+                    s.ownership_failed = True
+                    break
+                # Passive mode never needs ownership verification.
                 async for ev in self._advance_phase("passive mode needs no verification"):
                     yield ev
                 continue
@@ -149,7 +167,7 @@ class AgentOrchestrator:
                     yield ev
                 continue
 
-            available_tools = PHASE_TOOLS[s.phase]
+            available_tools = tools_for_phase(s.phase, active_enabled=self._active_enabled())
             if not available_tools:
                 async for ev in self._advance_phase("no tools available in this phase"):
                     yield ev
@@ -187,6 +205,21 @@ class AgentOrchestrator:
             assets=len(s.assets_by_value),
             status=self.scan.status.value,
         )
+
+    def _active_enabled(self) -> bool:
+        """True only for an active-mode scan that has passed the VERIFY-phase
+        ownership check this run (`Scan.verified` — brief section 6.1). This is the
+        single gate active tools (http_probe/tls_check/screenshot) pass through;
+        `tool_router.invoke` re-checks it independently rather than trusting the
+        caller."""
+        return self.scan.mode == ScanMode.ACTIVE and self.scan.verified
+
+    async def _verify_ownership(self) -> bool:
+        from vigia.agent.ownership import verify_ownership
+
+        if not self.scan.verification_token:
+            return False
+        return await verify_ownership(self.scan.domain, self.scan.verification_token)
 
     # -- one LLM-driven step -------------------------------------------------
 
@@ -307,7 +340,12 @@ class AgentOrchestrator:
         s = self._state
         try:
             result = await invoke(
-                tool_name, args, phase=phase, scope_guard=self.scope_guard, ctx=self.ctx
+                tool_name,
+                args,
+                phase=phase,
+                scope_guard=self.scope_guard,
+                ctx=self.ctx,
+                active_enabled=self._active_enabled(),
             )
         except (ToolNotAllowedError, ScopeViolation) as exc:
             async for ev in self._invalid_turn(str(exc)):
@@ -397,7 +435,7 @@ class AgentOrchestrator:
                 v for v, a in s.assets_by_value.items() if a.type == AssetType.SUBDOMAIN
             ]
             return [{"hostname": h} for h in hostnames[:MAX_ITEMS_PER_PHASE_TARGET]]
-        if tool_name == "dangling_dns":
+        if tool_name in ("dangling_dns", "http_probe", "tls_check", "screenshot"):
             hostnames = [v for v, a in s.assets_by_value.items() if a.type == AssetType.SUBDOMAIN]
             return [{"hostname": h} for h in hostnames[:MAX_ITEMS_PER_PHASE_TARGET]]
         if tool_name in ("shodan_internetdb", "censys_hosts"):
@@ -503,7 +541,9 @@ class AgentOrchestrator:
         await self.session.commit()
 
     async def _finish(self) -> None:
-        self.scan.status = ScanStatus.COMPLETED
+        self.scan.status = (
+            ScanStatus.FAILED if self._state.ownership_failed else ScanStatus.COMPLETED
+        )
         self.scan.finished_at = datetime.now(UTC)
         await self.session.commit()
 
@@ -576,17 +616,26 @@ async def run_agent_scan(
     settings: Settings,
     *,
     model_override: str | None = None,
+    mode: ScanMode = ScanMode.PASSIVE,
+    verification_token: str | None = None,
 ) -> AsyncGenerator[AgentEvent]:
     """Create a `Scan`, wire up the planner (checking model availability first per
     brief section 2), and drive `AgentOrchestrator.run()`. Raises
-    `EthicsNoticeNotAccepted` if the first-run notice hasn't been accepted."""
+    `EthicsNoticeNotAccepted` if the first-run notice hasn't been accepted.
+
+    For `mode=ScanMode.ACTIVE`, `verification_token` must be the token whose value
+    was published as a `vigia-verify=<token>` TXT record on `domain`'s root (see
+    `vigia.agent.ownership.generate_token`) — the VERIFY phase checks it live before
+    any active tool becomes reachable; a missing/wrong token fails the scan, it never
+    silently falls back to passive."""
     await ensure_accepted(session)
 
     planner_model = await resolve_planner(settings, model_override)
 
     scan = Scan(
         domain=domain,
-        mode=ScanMode.PASSIVE,
+        mode=mode,
+        verification_token=verification_token,
         planner_model=planner_model,
         extractor_model=settings.extractor_model,
         status=ScanStatus.RUNNING,

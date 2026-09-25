@@ -14,7 +14,8 @@ from typing import Any
 
 import httpx
 
-from vigia.agent.phases import PHASE_TOOLS, AgentPhase
+from vigia.agent.phases import AgentPhase
+from vigia.agent.phases import tools_for_phase as _tools_for_phase
 from vigia.agent.scope_guard import ScopeGuard
 from vigia.config import Settings
 from vigia.tools import base as tools_base
@@ -26,9 +27,12 @@ from vigia.tools import (
     email_auth,
     github_leaks,
     hibp_domain,
+    http_probe,
     kev_epss_enrich,
+    screenshot,
     shodan_internetdb,
     subfinder_enum,
+    tls_check,
     typosquat,
     wayback_urls,
     whois_asn,
@@ -109,6 +113,18 @@ async def _kev_epss_enrich(args: dict[str, Any], ctx: ToolContext) -> tools_base
     return await kev_epss_enrich.run(kev_epss_enrich.KevEpssEnrichInput(**args), ctx.client)
 
 
+async def _http_probe(args: dict[str, Any], ctx: ToolContext) -> tools_base.ToolResult:
+    return await http_probe.run(http_probe.HttpProbeInput(**args), ctx.client)
+
+
+async def _tls_check(args: dict[str, Any], ctx: ToolContext) -> tools_base.ToolResult:
+    return await tls_check.run(tls_check.TlsCheckInput(**args))
+
+
+async def _screenshot(args: dict[str, Any], ctx: ToolContext) -> tools_base.ToolResult:
+    return await screenshot.run(screenshot.ScreenshotInput(**args))
+
+
 INVOKERS: dict[str, Invoker] = {
     "whois_asn": _whois_asn,
     "ct_subdomains": _ct_subdomains,
@@ -123,11 +139,14 @@ INVOKERS: dict[str, Invoker] = {
     "github_leaks": _github_leaks,
     "hibp_domain": _hibp_domain,
     "kev_epss_enrich": _kev_epss_enrich,
+    "http_probe": _http_probe,
+    "tls_check": _tls_check,
+    "screenshot": _screenshot,
 }
 
 
-def tools_for_phase(phase: AgentPhase) -> list[str]:
-    return PHASE_TOOLS[phase]
+def tools_for_phase(phase: AgentPhase, *, active_enabled: bool = False) -> list[str]:
+    return _tools_for_phase(phase, active_enabled=active_enabled)
 
 
 async def invoke(
@@ -137,13 +156,17 @@ async def invoke(
     phase: AgentPhase,
     scope_guard: ScopeGuard,
     ctx: ToolContext,
+    active_enabled: bool = False,
 ) -> tools_base.ToolResult:
-    """Validate (phase allowlist, then Scope Guard) and run one tool call.
+    """Validate (phase/mode allowlist, then Scope Guard) and run one tool call.
 
     Raises `ToolNotAllowedError` / `ScopeViolation` before any tool code runs — an
-    invalid call never reaches the network or a subprocess.
+    invalid call never reaches the network or a subprocess. `active_enabled` must be
+    explicitly True (an active-mode scan that's passed ownership verification —
+    `AgentOrchestrator` is the only caller that ever sets it) for http_probe/
+    tls_check/screenshot to be reachable at all.
     """
-    if tool_name not in PHASE_TOOLS[phase]:
+    if tool_name not in _tools_for_phase(phase, active_enabled=active_enabled):
         raise ToolNotAllowedError(f"{tool_name!r} is not allowed in phase {phase.value!r}")
     scope_guard.validate(tool_name, args)
     return await INVOKERS[tool_name](args, ctx)

@@ -27,15 +27,22 @@
   },
   "NewScan": {
     "heading": "New scan",
-    "subtitle": "Passive mode only for now — active scanning needs domain-ownership verification, which lands in a later phase.",
+    "subtitle": "Active mode runs real network requests against the target (http_probe, tls_check, screenshot) — only available once domain ownership is verified.",
     "domainLabel": "Target domain",
     "domainPlaceholder": "example.com",
     "modelLabel": "Planner model override (optional)",
     "modelPlaceholder": "leave blank to use the configured/available default",
+    "modeLabel": "Scan mode",
+    "modePassive": "Passive",
+    "modeActive": "Active (requires domain ownership verification)",
     "submit": "Start passive scan",
+    "submitActive": "Create active scan",
     "submitting": "Starting…",
     "ethicsHeading": "Ethical use notice",
-    "ethicsAccept": "I own or am authorized to test this domain — accept"
+    "ethicsAccept": "I own or am authorized to test this domain — accept",
+    "verificationHeading": "Verify domain ownership",
+    "verificationInstructions": "Publish this exact value as a TXT record on {domain}'s root DNS, then continue — the scan checks it live when it starts and fails closed if it's missing or wrong.",
+    "verificationContinue": "I've published it — continue"
   },
   "Live": {
     "heading": "Live scan",

@@ -44,6 +44,23 @@ async def _run_ethics(do_accept: bool) -> None:
 
 
 @app.command()
+def verify(
+    domain: str = typer.Argument(..., help="Domain you want to run an active scan against."),
+) -> None:
+    """Print a fresh ownership-verification token for DOMAIN.
+
+    Publish the printed value as a `vigia-verify=<token>` TXT record on the domain's
+    root, then pass it to `vigia scan --active --token`. Stateless by design — the
+    token isn't stored anywhere until you pass it back; the VERIFY phase checks DNS
+    live when the active scan actually runs (brief section 6.1)."""
+    from vigia.agent.ownership import generate_token
+
+    token = generate_token()
+    typer.echo(f"Publish this TXT record on {domain}'s root, then re-run with --active --token:")
+    typer.echo(f"\n  {token}\n")
+
+
+@app.command()
 def scan(
     domain: str = typer.Argument(..., help="Target domain — must be your own or authorized."),
     agent: bool = typer.Option(
@@ -52,15 +69,32 @@ def scan(
     model: str | None = typer.Option(
         None, "--model", help="Override the planner model for this scan (agent mode only)."
     ),
+    active: bool = typer.Option(
+        False,
+        "--active",
+        help="Active mode (agent only): also runs http_probe/tls_check/screenshot. "
+        "Requires --token from a prior `vigia verify`.",
+    ),
+    token: str | None = typer.Option(
+        None, "--token", help="The token printed by `vigia verify DOMAIN` (--active only)."
+    ),
 ) -> None:
-    """Run a passive scan against DOMAIN.
+    """Run a scan against DOMAIN.
 
-    By default this runs the deterministic pipeline (Phase 2, no LLM). Pass --agent
-    to instead let the LLM planner (Phase 3) decide the sequence of tool calls.
-    Active mode isn't implemented yet (Phase 7).
+    By default this runs the deterministic passive pipeline (Phase 2, no LLM). Pass
+    --agent to instead let the LLM planner (Phase 3) decide the sequence of tool
+    calls; add --active --token <token> (see `vigia verify`) to also allow active
+    tools once ownership is confirmed. --active without --agent isn't supported —
+    the deterministic pipeline is passive-only.
     """
+    if active and not agent:
+        typer.echo("--active requires --agent.", err=True)
+        raise typer.Exit(code=1)
+    if active and not token:
+        typer.echo("--active requires --token (see `vigia verify DOMAIN`).", err=True)
+        raise typer.Exit(code=1)
     if agent:
-        asyncio.run(_run_agent_scan(domain, model))
+        asyncio.run(_run_agent_scan(domain, model, active=active, token=token))
     else:
         asyncio.run(_run_pipeline_scan(domain))
 
@@ -80,17 +114,26 @@ async def _run_pipeline_scan(domain: str) -> None:
         typer.echo(f"  {tool}: {status}", err=True)
 
 
-async def _run_agent_scan(domain: str, model_override: str | None) -> None:
+async def _run_agent_scan(
+    domain: str, model_override: str | None, *, active: bool = False, token: str | None = None
+) -> None:
     from vigia.agent.orchestrator import run_agent_scan
     from vigia.config import get_settings
+    from vigia.db.models import ScanMode
     from vigia.db.session import session_scope
     from vigia.ethics import EthicsNoticeNotAccepted
 
     settings = get_settings()
+    mode = ScanMode.ACTIVE if active else ScanMode.PASSIVE
     try:
         async with session_scope() as session:
             async for event in run_agent_scan(
-                session, domain, settings, model_override=model_override
+                session,
+                domain,
+                settings,
+                model_override=model_override,
+                mode=mode,
+                verification_token=token,
             ):
                 typer.echo(f"[{event.type.value}] {event.data}", err=True)
     except EthicsNoticeNotAccepted as exc:

@@ -1,0 +1,29 @@
+# Subdomain-takeover confirmation signatures: well-known "this service has nothing
+# claimed at this hostname" response-body substrings, checked by `http_probe`
+# (active, Phase 7) to upgrade a `dangling_dns` (Phase 2, passive) *candidate*
+# finding into a confirmed one. Public, widely-documented strings (the same idea as
+# the community "can-i-take-over-xyz" fingerprint list) — independent of the CNAME
+# fingerprints in dangling_dns.yaml, since http_probe checks the response body
+# directly rather than requiring a prior CNAME match.
+#
+# version: 1 (2026-09-25)
+
+signatures:
+  - service: GitHub Pages
+    body_contains: "There isn't a GitHub Pages site here"
+  - service: Heroku
+    body_contains: "no such app"
+  - service: AWS S3
+    body_contains: "NoSuchBucket"
+  - service: Azure Web Apps
+    body_contains: "404 Web Site not found"
+  - service: Shopify
+    body_contains: "Sorry, this shop is currently unavailable"
+  - service: Netlify
+    body_contains: "Not Found - Request ID:"
+  - service: Vercel
+    body_contains: "DEPLOYMENT_NOT_FOUND"
+  - service: Fastly
+    body_contains: "Fastly error: unknown domain"
+  - service: Surge.sh
+    body_contains: "project not found"

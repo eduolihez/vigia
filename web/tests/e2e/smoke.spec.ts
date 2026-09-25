@@ -51,6 +51,60 @@ test("new scan form is enabled once the ethics notice is accepted", async ({ pag
   await expect(page.getByRole("button", { name: "Start passive scan" })).toBeVisible();
 });
 
+test("selecting active mode shows the verification token after creating a scan", async ({
+  page,
+}) => {
+  await mockApi(page);
+  await page.route(`${API_ORIGIN}/scans`, (route) => {
+    if (route.request().method() === "POST") {
+      return route.fulfill({
+        status: 201,
+        json: {
+          id: "scan-active-1",
+          domain: "example.com",
+          status: "pending",
+          mode: "active",
+          verification_token: "vigia-verify=abc123",
+        },
+      });
+    }
+    return route.fulfill({ json: [] });
+  });
+  // The live page fetches the scan's own status on mount (ADR-020) — mock it too,
+  // scoped to the API's own origin, so navigating there doesn't hit a real backend.
+  await page.route(`${API_ORIGIN}/scans/scan-active-1`, (route) =>
+    route.fulfill({
+      json: {
+        id: "scan-active-1",
+        domain: "example.com",
+        mode: "active",
+        status: "pending",
+        verified: false,
+        verification_token: "vigia-verify=abc123",
+        started_at: null,
+        finished_at: null,
+        findings_count: 0,
+        max_severity: null,
+      },
+    }),
+  );
+  // The live page also opens an EventSource to the stream endpoint — mock it too
+  // so it doesn't hang waiting for a real backend connection.
+  await page.route(`${API_ORIGIN}/scans/scan-active-1/stream`, (route) =>
+    route.fulfill({ status: 200, contentType: "text/event-stream", body: "" }),
+  );
+
+  await page.goto("/scans/new");
+  await page.getByLabel("Target domain").fill("example.com");
+  await page.getByLabel("Active (requires domain ownership verification)").check();
+  await page.getByRole("button", { name: "Create active scan" }).click();
+
+  await expect(page.getByRole("heading", { name: "Verify domain ownership" })).toBeVisible();
+  await expect(page.getByText("vigia-verify=abc123")).toBeVisible();
+  await page.getByRole("button", { name: "I've published it — continue" }).click();
+  await expect(page).toHaveURL(/\/scans\/scan-active-1\/live$/);
+});
+
 test("nav links move between dashboard and new-scan", async ({ page }) => {
   await mockApi(page);
   await page.goto("/scans/new");

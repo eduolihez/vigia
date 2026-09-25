@@ -89,6 +89,30 @@ picks the locale — ADR-028). New API surface: `GET/PUT /settings`,
 page now shares a `ScanSubNav`. 12 Playwright smoke tests green, including a
 locale-switch check.
 
+**Phase 7 (Active mode) — done.** Three active tools (`vigia/tools/http_probe.py`,
+`tls_check.py`, `screenshot.py`) — real network requests to the target host, unlike
+every Phase 2 tool. Gated by `agent/phases.py::ACTIVE_PHASE_TOOLS` +
+`tool_router.invoke`'s `active_enabled` flag (ADR-033), which only
+`AgentOrchestrator._active_enabled()` ever sets `True`, and only once the VERIFY
+phase confirms domain ownership via `agent/ownership.py`'s `vigia-verify=<token>` TXT
+record check (already stubbed in Phase 3). Verification fails closed: a wrong/missing
+token stops the whole scan (`Scan.status = FAILED`), not just the active tools
+(ADR-032). `http_probe` also confirms `dangling_dns` (Phase 2) takeover *candidates*
+via `fingerprints/takeover_signatures.yaml` response-body signatures, independent of
+the CNAME match (ADR-031) — `dangling_dns_confirmed` findings are the direct result.
+`tls_check` flags expired/expiring/self-signed/hostname-mismatched certs and weak
+negotiated TLS versions (ADR-030); `screenshot` captures a full-page PNG via
+Playwright — already a dependency (ADR-029) — and flags common exposed-admin-panel
+page titles. New surface: `POST /scans` takes `mode: "passive"|"active"` and returns
+`verification_token` for active mode; `vigia verify <domain>` (CLI) prints a fresh
+token statelessly; `vigia scan <domain> --agent --active --token <token>` runs an
+active scan from the CLI. GUI: `/scans/new` has a passive/active mode toggle that
+shows the TXT record to publish before continuing to the live view. Verified live
+against the real API + a real (unowned) domain that ownership verification correctly
+fails closed for — active *tools* themselves are tested only against local
+mocks/servers, never a real domain (brief rule 6). 160 backend tests green (up from
+139), 13 Playwright smoke tests green.
+
 ## Commands
 
 ### Backend (`api/`)
@@ -107,6 +131,10 @@ uv run vigia scan <domain> --agent  # LLM-driven agent (Phase 3); needs Ollama r
                                      #  and OLLAMA_HOST/VIGIA_PLANNER_MODEL configured
                                      #  (or pass --model to override for one scan)
 uv run vigia ethics --accept        # required once before any scan will run
+uv run vigia verify <domain>        # print a fresh vigia-verify=<token> to publish as
+                                     #  a TXT record before an active scan (Phase 7)
+uv run vigia scan <domain> --agent --active --token <token>  # active scan; needs
+                                     #  --agent and a token from `vigia verify` first
 uv run vigia score <scan_id>        # (re)score findings with the Risk Engine (Phase 4)
 uv run vigia report <scan_id> --format md|json|pdf --out <path>  # generate a report
 ```
@@ -167,9 +195,11 @@ outside a fixed Pydantic schema.
 ```
 vigia/
 ├── api/            FastAPI backend (vigia/ package: agent, tools, risk, report, db, api)
-│                   tools/ has 13 passive wrappers + kev_epss_enrich (Phase 2);
+│                   tools/ has 13 passive wrappers + kev_epss_enrich (Phase 2) plus
+│                   3 active wrappers (http_probe/tls_check/screenshot, Phase 7);
 │                   pipeline.py is the deterministic `vigia scan` pipeline;
-│                   agent/ is the Phase 3 LLM orchestrator (see agent/orchestrator.py);
+│                   agent/ is the Phase 3 LLM orchestrator (see agent/orchestrator.py)
+│                   and Phase 7's ownership.py (TXT-record verification);
 │                   risk/ + report/ are the Phase 4 Risk Engine and Report Writer;
 │                   settings_store.py + crypto.py back the Phase 6 Settings page
 ├── web/             Next.js frontend — app/ has the Phase 5 routes (dashboard,

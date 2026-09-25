@@ -44,12 +44,21 @@ _running_tasks: dict[str, asyncio.Task[None]] = {}
 class StartScanRequest(BaseModel):
     domain: str
     model: str | None = None
+    mode: str = "passive"
+    """"passive" or "active". Active mode requires domain-ownership verification —
+    see `CreateScanResponse.verification_token`; the scan's VERIFY phase checks it
+    live on first run and fails closed if it's missing/wrong (brief section 6.1)."""
 
 
 class CreateScanResponse(BaseModel):
     id: str
     domain: str
     status: str
+    mode: str
+    verification_token: str | None = None
+    """Set only for `mode="active"`: publish this exact value as a
+    `vigia-verify=<token>` TXT record on the domain's root before starting the scan
+    (subscribing to `GET /scans/{id}/stream`)."""
 
 
 class ScanSummary(BaseModel):
@@ -57,6 +66,8 @@ class ScanSummary(BaseModel):
     domain: str
     mode: str
     status: str
+    verified: bool
+    verification_token: str | None
     started_at: str | None
     finished_at: str | None
     findings_count: int
@@ -115,14 +126,28 @@ async def create_scan(request: StartScanRequest, session: SessionDep) -> CreateS
     except EthicsNoticeNotAccepted as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
+    try:
+        mode = ScanMode(request.mode)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=400, detail=f"Unknown mode {request.mode!r}; use 'passive' or 'active'."
+        ) from exc
+
     config = await build_effective_config(session, get_settings())
     from vigia.agent.orchestrator import resolve_planner
 
     planner_model = await resolve_planner(config, request.model)
 
+    verification_token = None
+    if mode == ScanMode.ACTIVE:
+        from vigia.agent.ownership import generate_token
+
+        verification_token = generate_token()
+
     scan = Scan(
         domain=request.domain,
-        mode=ScanMode.PASSIVE,
+        mode=mode,
+        verification_token=verification_token,
         planner_model=planner_model,
         extractor_model=config.extractor_model,
         budget_max_steps=config.scan_max_steps,
@@ -132,7 +157,13 @@ async def create_scan(request: StartScanRequest, session: SessionDep) -> CreateS
     session.add(scan)
     await session.commit()
     await session.refresh(scan)
-    return CreateScanResponse(id=scan.id, domain=scan.domain, status=scan.status.value)
+    return CreateScanResponse(
+        id=scan.id,
+        domain=scan.domain,
+        status=scan.status.value,
+        mode=scan.mode.value,
+        verification_token=scan.verification_token,
+    )
 
 
 @router.get("")
@@ -161,6 +192,8 @@ async def list_scans(session: SessionDep, limit: int = 25) -> list[ScanSummary]:
                 domain=scan.domain,
                 mode=scan.mode.value,
                 status=scan.status.value,
+                verified=scan.verified,
+                verification_token=scan.verification_token,
                 started_at=scan.started_at.isoformat() if scan.started_at else None,
                 finished_at=scan.finished_at.isoformat() if scan.finished_at else None,
                 findings_count=len(findings),
@@ -188,6 +221,8 @@ async def get_scan(scan_id: str, session: SessionDep) -> ScanSummary:
         domain=scan.domain,
         mode=scan.mode.value,
         status=scan.status.value,
+        verified=scan.verified,
+        verification_token=scan.verification_token,
         started_at=scan.started_at.isoformat() if scan.started_at else None,
         finished_at=scan.finished_at.isoformat() if scan.finished_at else None,
         findings_count=len(findings),

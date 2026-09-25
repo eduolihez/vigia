@@ -27,15 +27,22 @@
   },
   "NewScan": {
     "heading": "Nuevo escaneo",
-    "subtitle": "Solo modo pasivo por ahora — el escaneo activo necesita verificación de propiedad del dominio, que llega en una fase posterior.",
+    "subtitle": "El modo activo hace peticiones de red reales contra el objetivo (http_probe, tls_check, screenshot) — solo disponible una vez verificada la propiedad del dominio.",
     "domainLabel": "Dominio objetivo",
     "domainPlaceholder": "example.com",
     "modelLabel": "Modelo planificador (opcional)",
     "modelPlaceholder": "deja en blanco para usar el predeterminado configurado/disponible",
+    "modeLabel": "Modo de escaneo",
+    "modePassive": "Pasivo",
+    "modeActive": "Activo (requiere verificación de propiedad del dominio)",
     "submit": "Iniciar escaneo pasivo",
+    "submitActive": "Crear escaneo activo",
     "submitting": "Iniciando…",
     "ethicsHeading": "Aviso de uso ético",
-    "ethicsAccept": "Soy propietario o tengo autorización para probar este dominio — aceptar"
+    "ethicsAccept": "Soy propietario o tengo autorización para probar este dominio — aceptar",
+    "verificationHeading": "Verifica la propiedad del dominio",
+    "verificationInstructions": "Publica exactamente este valor como registro TXT en la raíz DNS de {domain} y continúa — el escaneo lo comprueba en vivo al iniciarse y falla si falta o es incorrecto.",
+    "verificationContinue": "Ya lo he publicado — continuar"
   },
   "Live": {
     "heading": "Escaneo en vivo",

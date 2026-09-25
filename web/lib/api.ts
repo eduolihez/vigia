@@ -15,6 +15,8 @@ export interface ScanSummary {
   domain: string;
   mode: string;
   status: ScanStatus;
+  verified: boolean;
+  verification_token: string | null;
   started_at: string | null;
   finished_at: string | null;
   findings_count: number;
@@ -137,13 +139,22 @@ export function listFindings(scanId: string): Promise<FindingOut[]> {
   return apiFetch(`/scans/${scanId}/findings`);
 }
 
+export interface CreateScanResponse {
+  id: string;
+  domain: string;
+  status: string;
+  mode: string;
+  verification_token: string | null;
+}
+
 export function createScan(
   domain: string,
   model?: string,
-): Promise<{ id: string; domain: string; status: string }> {
+  mode: "passive" | "active" = "passive",
+): Promise<CreateScanResponse> {
   return apiFetch("/scans", {
     method: "POST",
-    body: JSON.stringify({ domain, model: model || null }),
+    body: JSON.stringify({ domain, model: model || null, mode }),
   });
 }
 

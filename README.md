@@ -4,11 +4,12 @@
 
 *[Versión en español](README.es.md)*
 
-**Status: Phase 6 of 9 done** (Base, Passive tools, Agent, Risk & Report, GUI core,
-GUI advanced). Usable end to end for passive scans, from either the CLI or the
-bilingual (ES/EN) web dashboard — including the report viewer, asset graph, audit
-log, and a Settings page for model/budget/API-key overrides. See
-[CLAUDE.md](CLAUDE.md) for exact phase status and commands.
+**Status: Phase 7 of 9 done** (Base, Passive tools, Agent, Risk & Report, GUI core,
+GUI advanced, Active mode). Usable end to end for both passive and (once domain
+ownership is verified) active scans, from either the CLI or the bilingual (ES/EN)
+web dashboard — including the report viewer, asset graph, audit log, and a Settings
+page for model/budget/API-key overrides. See [CLAUDE.md](CLAUDE.md) for exact phase
+status and commands.
 
 ## What is Vigía?
 

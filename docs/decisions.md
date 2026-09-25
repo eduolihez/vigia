@@ -3,6 +3,80 @@
 Short ADRs for decisions made autonomously during development, per the project brief's
 "choose the reasonable option and document it" rule. Newest first.
 
+## ADR-033: active tools are an additive allowlist, gated by a runtime bool, not baked into `PHASE_TOOLS`
+
+- **Context:** Phase 7 adds `http_probe`/`tls_check`/`screenshot` (real network
+  requests to the target), only permitted once an active-mode scan passes
+  domain-ownership verification (brief section 6.1). They need to be unreachable by
+  construction for every passive scan, and for an active scan before VERIFY passes.
+- **Decision:** `agent/phases.py` keeps `PHASE_TOOLS` (passive, always available)
+  untouched and adds a separate `ACTIVE_PHASE_TOOLS` dict plus
+  `tools_for_phase(phase, active_enabled=False)`, which only merges the active set in
+  when explicitly asked. `tool_router.invoke()` takes the same `active_enabled` flag
+  and is the single enforcement point — `AgentOrchestrator._active_enabled()` is the
+  only caller that ever passes `True`, and only after `Scan.mode == ACTIVE and
+  Scan.verified`. A prompt-injection payload claiming "verification bypassed" can't
+  reach an active tool through any code path; there's no flag on the args, only on
+  the trusted Python call site (tested in
+  `tests/injection/test_prompt_injection.py::test_injection_cannot_run_active_tool_without_active_enabled`).
+- **Consequence:** the LLM tool-calling schema itself (`tool_schemas.build_tool_defs`)
+  never even lists the active tools for a passive/unverified scan — the planner can't
+  request what it was never told exists.
+
+## ADR-032: VERIFY fails closed and halts the whole scan, not just active tools
+
+- **Context:** an active-mode scan's `VERIFY` phase needs to check the
+  `vigia-verify=<token>` TXT record (`agent/ownership.py`, written in Phase 3 prep)
+  before anything active runs. The open question: if verification fails, should the
+  scan silently continue in passive-only mode, or stop entirely?
+- **Decision:** stop entirely. `AgentOrchestrator.run()`'s VERIFY branch sets
+  `_AgentState.ownership_failed = True` and `break`s the main loop immediately —
+  no SEED, no ENUMERATE, nothing — then `_finish()` sets `Scan.status = FAILED`
+  (not `COMPLETED`) when that flag is set. Silently degrading to passive would be
+  surprising: the user explicitly asked for active mode and would see a "completed"
+  scan that quietly did less than requested, with no clear signal why.
+- **Consequence:** a user who forgot to publish the TXT record gets an unambiguous
+  failed scan with a specific error message, not a confusing partial result.
+
+## ADR-031: http_probe confirms dangling-DNS takeover from the response body, independent of the CNAME fingerprint match
+
+- **Context:** `dangling_dns` (Phase 2, passive) flags a *candidate* takeover purely
+  from a CNAME pattern (`fingerprints/dangling_dns.yaml`) — it can't confirm the
+  target is actually unclaimed without an active HTTP request. `http_probe` (Phase 7)
+  is that confirmation step.
+- **Decision:** rather than re-deriving "which service does this CNAME match" and
+  only then checking that service's specific signature, `http_probe` checks the
+  response body against every signature in a new, independent list
+  (`fingerprints/takeover_signatures.yaml` — well-known "unclaimed" strings, the same
+  idea as the community "can-i-take-over-xyz" project) regardless of the CNAME. This
+  also lets `http_probe` confirm a takeover on a hostname `dangling_dns` never
+  flagged (e.g. a CNAME fingerprint gap), not only ones it already suspected.
+- **Consequence:** two YAML files exist for a related purpose (CNAME suffix vs. body
+  substring) — intentional, since they're checked at different points against
+  different data (DNS record vs. HTTP response) with different confidence levels.
+
+## ADR-030: tls_check parses the certificate with `cryptography`, not `ssl.getpeercert()`
+
+- **Context:** `tls_check` deliberately connects with `ssl.CERT_NONE` (the point is
+  to see *whatever* certificate a host presents — expired, self-signed, wrong name —
+  and report it, not to fail before looking). Python's `ssl.SSLSocket.getpeercert()`
+  only returns the parsed dict form when verification succeeded; with `CERT_NONE` it
+  returns `{}` regardless of what was actually presented.
+- **Decision:** fetch the raw DER bytes (`getpeercert(binary_form=True)`, always
+  populated) and parse them directly with `cryptography.x509` — already a project
+  dependency (`vigia/crypto.py`, ADR-026) — to read subject/issuer/SAN/expiry
+  regardless of verification outcome.
+
+## ADR-029: screenshot reuses Playwright — no new browser-automation dependency
+
+- **Context:** Phase 7's `screenshot` tool needs to render a real page and capture a
+  PNG. `playwright` is already a dependency (the Phase 4 PDF report exporter,
+  ADR-016) and its Python async API supports screenshots natively.
+- **Decision:** use it directly rather than adding Selenium/Puppeteer/etc. Verified
+  locally with a real local HTTP server and real Chromium
+  (`tests/unit/tools/test_screenshot.py`) — same "real bytes, local target" approach
+  as the PDF exporter's own test, not a mock.
+
 ## ADR-028: i18n via next-intl without `[locale]` routing — a cookie picks the locale
 
 - **Context:** Phase 6 requires bilingual ES/EN UI copy. next-intl's default setup

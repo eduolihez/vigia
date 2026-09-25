@@ -12,8 +12,9 @@ web (Next.js)  ──SSE/REST──►  api (FastAPI)
                                 ├─ agent/sanitizer       untrusted OSINT data      [Phase 3]
                                 ├─ agent/tool_router      phase allowlist + exec   [Phase 3]
                                 ├─ agent/llm_client       Ollama chat/tool-calling [Phase 3]
-                                ├─ tools/*               one wrapper per source    [Phase 2]
+                                ├─ tools/*               one wrapper per source    [Phase 2/7]
                                 ├─ pipeline.py            deterministic passive    [Phase 2]
+                                ├─ agent/ownership.py     TXT-record verification  [Phase 7]
                                 ├─ risk/engine            CVSS + KEV + EPSS        [Phase 4]
                                 ├─ report/writer          LLM → draft report       [Phase 4]
                                 ├─ report/validator       entity/evidence check    [Phase 4]
@@ -79,13 +80,20 @@ but re-running `score` or `report` on an already-scored/reported scan is always 
   copy with `Setting`-table overrides and decrypted `ApiKey` values applied, so
   none of that code needed to change (ADR-026). Reports stay generate-on-demand
   over the API too, same as the Phase 4 CLI (ADR-027).
+- **Phase 7:** `agent/phases.py::ACTIVE_PHASE_TOOLS` + `tool_router.invoke`'s
+  `active_enabled` flag are the single reachability gate for `http_probe`/
+  `tls_check`/`screenshot` — only `AgentOrchestrator._active_enabled()` ever passes
+  `True`, and only once VERIFY confirms ownership via `agent/ownership.py`
+  (ADR-033). VERIFY failure stops the whole scan (`Scan.status = FAILED`), not just
+  the active tools (ADR-032). `http_probe` also upgrades a Phase 2 `dangling_dns`
+  *candidate* into a confirmed `dangling_dns_confirmed` finding by checking the live
+  response body against `fingerprints/takeover_signatures.yaml`, independent of the
+  original CNAME match (ADR-031).
 
 ## Not yet built
 
 - **Report Writer isn't wired into the agent's REPORT phase** — it auto-advances
   (no-op) for now; `vigia report` (and `POST /scans/{id}/report`) work standalone
   against any completed scan.
-- **No active-mode tools** (`http_probe`, `screenshot`, `tls_check` — Phase 7):
-  `agent/ownership.py` (TXT-record verification) exists but nothing consumes it yet.
 - **`eval/` benchmarking harness** (Phase 8) and the polished README/docs pass
   (Phase 9) haven't started.

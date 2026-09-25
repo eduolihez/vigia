@@ -104,7 +104,45 @@ async def test_create_scan_creates_pending_row() -> None:
     body = response.json()
     assert body["domain"] == "example.com"
     assert body["status"] == "pending"
+    assert body["mode"] == "passive"
+    assert body["verification_token"] is None
     assert body["id"]
+
+
+async def test_create_active_scan_returns_a_verification_token() -> None:
+    async with _session_factory() as session:
+        await accept_ethics_notice(session)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/scans",
+            json={"domain": "example.com", "model": "fake-model", "mode": "active"},
+        )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["mode"] == "active"
+    assert body["verification_token"] is not None
+    assert body["verification_token"].startswith("vigia-verify=")
+
+    get_response = await AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ).get(f"/scans/{body['id']}")
+    assert get_response.json()["verified"] is False
+
+
+async def test_create_scan_rejects_unknown_mode() -> None:
+    async with _session_factory() as session:
+        await accept_ethics_notice(session)
+
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post(
+            "/scans", json={"domain": "example.com", "model": "fake-model", "mode": "aggressive"}
+        )
+
+    assert response.status_code == 400
 
 
 async def test_create_scan_requires_ethics_acceptance(monkeypatch: pytest.MonkeyPatch) -> None:

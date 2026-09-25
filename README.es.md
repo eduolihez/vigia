@@ -4,12 +4,13 @@
 
 *[English version](README.md)*
 
-**Estado: Fase 6 de 9 completada** (Base, Tools pasivas, Agente, Riesgo e Informe,
-GUI núcleo, GUI avanzada). Usable de punta a punta para escaneos pasivos, tanto por
-CLI como desde el panel web bilingüe (ES/EN) — incluye el visor de informes, el
-grafo de activos, el registro de auditoría y una página de Ajustes para modelo,
-presupuestos y claves de API. Consulta [CLAUDE.md](CLAUDE.md) para el estado exacto
-y los comandos disponibles.
+**Estado: Fase 7 de 9 completada** (Base, Tools pasivas, Agente, Riesgo e Informe,
+GUI núcleo, GUI avanzada, Modo activo). Usable de punta a punta tanto para escaneos
+pasivos como (una vez verificada la propiedad del dominio) activos, tanto por CLI
+como desde el panel web bilingüe (ES/EN) — incluye el visor de informes, el grafo de
+activos, el registro de auditoría y una página de Ajustes para modelo, presupuestos
+y claves de API. Consulta [CLAUDE.md](CLAUDE.md) para el estado exacto y los
+comandos disponibles.
 
 ## ¿Qué es Vigía?
 
